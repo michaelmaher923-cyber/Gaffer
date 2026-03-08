@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSM ULTIMATE PRO 2026 | MICHAEL MAHER EDITION</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root { 
+            --gold: #FFD700; --dark: #050505; --card: #111; --border: #222; 
+            --green: #1b5e20; --red: #ff3366; --blue: #00d2ff; --shadow: 0 0 20px rgba(0,0,0,0.5); 
+        }
+        
+        * { box-sizing: border-box; font-family: 'Cairo', sans-serif; margin: 0; padding: 0; transition: 0.3s; }
+        body { background: var(--dark); color: #fff; height: 100vh; overflow: hidden; }
+        .formation-selector { display: flex; gap: 8px; overflow-x: auto; padding: 10px; background: #000; border-bottom: 1px solid #222; margin-bottom: 10px; scrollbar-width: none; }
+.form-btn { background: #111; color: #777; border: 1px solid #333; padding: 6px 12px; border-radius: 5px; cursor: pointer; white-space: nowrap; font-size: 11px; font-weight: bold; }
+.form-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(255,215,0,0.1); }
+
+
+        .screen { position: fixed; inset: 0; display: none; z-index: 10; flex-direction: column; background: #000; }
+        .active-screen { display: flex; }
+
+        #scr-login { align-items: center; justify-content: center; background: radial-gradient(circle, #1a1a1a 0%, #000 100%); }
+        .login-card { background: var(--card); padding: 50px; border-radius: 25px; border: 2px solid var(--gold); width: 400px; text-align: center; box-shadow: var(--shadow); }
+        
+        input, select, textarea { 
+            width: 100%; padding: 14px; margin: 12px 0; background: #000; border: 1px solid #333; 
+            color: #fff; border-radius: 10px; outline: none; font-size: 16px; 
+        }
+        input:focus { border-color: var(--gold); }
+        
+        .btn-gold { 
+            background: var(--gold); color: #000; border: none; padding: 14px; border-radius: 10px; 
+            font-weight: 900; cursor: pointer; width: 100%; font-size: 18px; text-transform: uppercase; 
+        }
+        .btn-gold:hover { transform: scale(1.02); box-shadow: 0 0 15px var(--gold); }
+
+        aside { width: 280px; background: #000; border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 20; }
+        main { flex: 1; display: flex; flex-direction: column; background: #080808; overflow: hidden; position: relative; }
+        header { 
+            height: 80px; background: #0a0a0a; border-bottom: 1px solid var(--border); 
+            display: flex; align-items: center; justify-content: space-between; padding: 0 25px; 
+        }
+
+        .nav-item { 
+            padding: 18px 30px; cursor: pointer; color: #777; display: flex; align-items: center; 
+            gap: 15px; font-weight: bold; border-right: 5px solid transparent; font-size: 15px; 
+        }
+        .nav-item:hover, .nav-item.active { color: var(--gold); background: #111; border-right-color: var(--gold); }
+
+        .squad-view { display: grid; grid-template-columns: 1.3fr 1fr; gap: 25px; padding: 25px; height: 100%; overflow: hidden; }
+        .pitch { 
+            position: relative; width: 100%; max-width: 450px; aspect-ratio: 2/3; background: var(--green); 
+            border: 5px solid #fff; border-radius: 15px; margin: auto; 
+            background-image: repeating-linear-gradient(0deg, #2e7d32, #2e7d32 10%, #1b5e20 10%, #1b5e20 20%); 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8); 
+        }
+        .player-slot { 
+            position: absolute; width: 65px; height: 65px; background: rgba(0,0,0,0.8); 
+            border: 2px dashed rgba(255,255,255,0.4); border-radius: 50%; transform: translate(-50%, -50%); 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            cursor: pointer; font-size: 10px; text-align: center; z-index: 5; 
+        }
+        .player-slot.occupied { border: 2px solid var(--gold); background: #000; box-shadow: 0 0 10px var(--gold); }
+        
+        .content-card { background: var(--card); border-radius: 20px; padding: 25px; overflow-y: auto; height: 100%; border: 1px solid #222; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { color: var(--gold); background: #1a1a1a; padding: 15px; border-bottom: 2px solid #333; text-align: center; }
+        td { padding: 15px; text-align: center; border-bottom: 1px solid #222; }
+        
+        .player-row { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 15px; border-bottom: 1px solid #222; cursor: pointer; border-radius: 8px; 
+        }
+        .player-row:hover { background: #1a1a1a; transform: translateX(-5px); }
+
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 1000; display: none; align-items: center; justify-content: center; padding: 20px; }
+        .modal-content { 
+            background: var(--card); width: 100%; max-width: 600px; padding: 35px; border-radius: 25px; 
+            border: 1px solid var(--gold); max-height: 90vh; overflow-y: auto; 
+        }
+
+        .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; width: 90%; max-height: 70vh; overflow-y: auto; padding: 20px; }
+        .team-box { background: var(--card); border: 1px solid #333; padding: 25px; text-align: center; border-radius: 20px; cursor: pointer; }
+        .team-box:hover { border-color: var(--gold); transform: translateY(-10px); }
+        .team-box.locked { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
+
+        .timer-glow { font-family: 'Orbitron'; color: var(--gold); text-shadow: 0 0 10px var(--gold); font-size: 20px; }
+        .budget-tag { background: #002b36; color: var(--blue); padding: 5px 15px; border-radius: 20px; border: 1px solid var(--blue); font-weight: bold; }
+        .turbo-btn { background: #ff3366; border: none; padding: 10px; border-radius: 5px; color: #fff; cursor: pointer; font-weight: bold; margin-bottom: 10px; }
+        
+        .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 25px; height: 100%; overflow-y: auto; }
+        .offer-card { background: #1a1a1a; border-right: 4px solid var(--blue); padding: 15px; margin-bottom: 10px; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="scr-login" class="screen active-screen">
+    <div class="login-card">
+        <h1 style="font-family:'Orbitron'; color:var(--gold); font-size: 35px;">OSM MASTER</h1>
+        <p style="color:#666; margin-bottom: 30px;">MICHAEL MAHER EDITION 2026</p>
+        <input type="text" id="in-user" placeholder="اسم المدرب">
+        <input type="password" id="in-pass" placeholder="كلمة السر">
+        <button class="btn-gold" onclick="Core.login()">دخول القائد</button>
+    </div>
+</div>
+
+<div id="scr-picker" class="screen" style="align-items:center; justify-content:center;">
+    <h2 style="color:var(--gold); font-size: 30px; margin-bottom: 30px;">اختر قيادة فريقك</h2>
+    <div id="team-list" class="team-grid"></div>
+</div>
+
+<div id="scr-main" class="screen" style="flex-direction:row;">
+    <aside>
+        <div style="padding:40px 20px; text-align:center; border-bottom:1px solid #222;">
+            <i class="fas fa-shield-halved" style="font-size: 50px; color: var(--gold); margin-bottom: 15px;"></i>
+            <h3 id="ui-my-team" style="color:var(--gold); font-size: 22px;">--</h3>
+            <p id="ui-my-name" style="color:#555; letter-spacing: 2px;">--</p>
+        </div>
+        <nav style="flex:1">
+            <div class="nav-item active" onclick="UI.page('home', this)"><i class="fas fa-home"></i> الرئيسية</div>
+            <div class="nav-item" onclick="UI.page('squad', this)"><i class="fas fa-users-rectangle"></i> التشكيلة</div>
+            <div class="nav-item" onclick="UI.page('trophy')"><i class="fas fa-trophy"></i> جدول الدوري</div>
+            <div class="nav-item" onclick="UI.page('matches', this)"><i class="fas fa-file-invoice"></i> جدول المباريات</div>
+            <div class="nav-item" onclick="UI.page('tactics', this)"><i class="fas fa-chess-knight"></i> التكتيكات</div>
+             <div class="nav-item" onclick="UI.page('specialists', this)"><i class="fas fa-star"></i> المتخصصون</div>
+            <div class="nav-item" onclick="UI.page('transfers', this)"><i class="fas fa-exchange-alt"></i> الانتقالات</div>
+            <div class="nav-item" onclick="UI.page('press', this)"><i class="fas fa-microphone-alt"></i> غرفة الصحافة</div>
+            <div class="nav-item" style="color:var(--blue)" onclick="UI.showFriendly()"><i class="fas fa-handshake"></i> مباراة ودية</div>
+            <div id="admin-gate" class="nav-item" style="display:none; color:var(--red)" onclick="UI.showAdmin()"><i class="fas fa-code"></i> لوحة القائد</div>
+        </nav>
+        <div class="nav-item" style="color:var(--red); border-top: 1px solid #222;" onclick="location.reload()"><i class="fas fa-power-off"></i> خروج آمن</div>
+    </aside>
+
+    <main>
+        <header>
+            <div id="digital-clock" class="timer-glow">00:00:00</div>
+            <div style="display:flex; gap:25px; align-items: center;">
+                <div class="budget-tag">ميزانية: <span id="ui-money">0</span> $</div>
+                <div id="match-status" style="font-weight: bold; color: var(--red);">المحاكاة: نشطة</div>
+            </div>
+        </header>
+
+        <div id="main-content" style="flex:1; overflow:hidden;">
+            <section id="pg-home" class="page-content dash-grid">
+                            <div class="content-card" style="grid-column: span 2; display: flex; align-items: center; justify-content: space-around; background: linear-gradient(45deg, #111, #000); min-height: 100px;">
+                    <div style="text-align: center;">
+                        <h4 style="color: var(--gold); font-family: 'Orbitron'; font-size: 12px;">TEAM POWER</h4>
+                        <div id="ui-team-power" style="font-size: 40px; font-family: 'Orbitron'; font-weight: 900; color: #fff; text-shadow: 0 0 15px var(--gold);">0</div>
+                    </div>
+                    <div style="width: 60%; height: 12px; background: #222; border-radius: 10px; overflow: hidden; border: 1px solid #333;">
+                        <div id="ui-power-bar" style="width: 0%; height: 100%; background: var(--gold); box-shadow: 0 0 10px var(--gold); transition: 1s;"></div>
+                    </div>
+                </div>
+                <div class="content-card">
+                    <h3 style="color:var(--gold)"><i class="fas fa-calendar-check"></i> المباراة القادمة</h3>
+                    <div id="next-match-box" style="text-align:center; padding:20px;"></div>
+                </div>
+                <div class="content-card">
+                    <h3 style="color:var(--blue)"><i class="fas fa-envelope-open-text"></i> بريد العروض</h3>
+                    <div id="offers-box"></div>
+                </div>
+            </section>
+            <section id="pg-squad" class="page-content" style="display:none; height:100%;">
+              <div id="formation-bar" class="formation-selector"></div>
+    <div class="squad-view">
+        <div class="pitch" id="pitch-layout"></div>
+        <div class="content-card">
+            <h3 style="border-bottom: 1px solid #333; padding-bottom: 10px;">قائمة لاعبي الفريق</h3>
+            <div id="full-player-list"></div>
+        </div>
+    </div>
+
+            </section>
+            <section id="pg-league" class="page-content" style="display:none; padding:25px;">
+                <div class="content-card">
+                    <h3 style="color:var(--gold); margin-bottom:10px;">جدول الترتيب (الترقي)</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>النادي</th>
+                                <th>لعب</th>
+                                <th>فوز</th>
+                                <th>تعادل</th>
+                                <th>خسارة</th>
+                                <th>له/عليه</th>
+                                <th>نقاط</th>
+                            </tr>
+                        </thead>
+                        <tbody id="league-rows"></tbody>
+                    </table>
+                </div>
+            </section>
+            <section id="pg-matches" class="page-content" style="display:none; padding:25px; overflow-y:auto; height: 100%;">
+                <div id="matches-list-container" class="content-card"></div>
+            </section>
+            <section id="pg-transfers" class="page-content" style="display:none; padding:25px; overflow-y:auto; height:100%;">
+                <div class="content-card">
+                    <h3>سوق الانتقالات المفتوح</h3>
+                    <div id="transfer-market-list"></div>
+                </div>
+            </section>
+            <section id="pg-press" class="page-content" style="display:none; padding:25px;">
+                <div class="content-card">
+                    <h3>أخبار الدوري والغرفة الصحفية</h3>
+                    <div id="press-feed" style="height:300px; overflow-y:auto; margin-bottom:10px;"></div>
+                    <div style="margin-top:20px; border-top:1px solid #333; padding-top:15px;">
+                        <input type="text" id="press-input" placeholder="اكتب تصريحك هنا...">
+                        <button class="btn-gold" onclick="Engine.postPress()">نشر التصريح</button>
+                    </div>
+                </div>
+            </section>
+<section id="pg-tactics" class="page-content" style="display:none; padding:25px; overflow-y:auto; height:100%;">
+    <div class="content-card">
+        <h3 style="color:var(--gold); margin-bottom:20px;"><i class="fas fa-chess"></i> غرفة التكتيكات المتطورة</h3>
+        
+        <div style="margin-bottom:25px;">
+            <label><i class="fas fa-project-diagram"></i> أسلوب اللعب العام</label>
+            <select id="tac-style">
+                <option value="wings">اللعب على الأجناب</option>
+                <option value="passing">تكرار التمريرات</option>
+                <option value="shoot">تسديد عن بعد</option>
+                <option value="counter">هجوم مرتد</option>
+                <option value="long">كرات طولية</option>
+                <option value="clear">تشتيت سلبي</option>
+            </select>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:25px;">
+            <div>
+                <label style="font-size:12px;">الهجوم</label>
+                <select id="tac-atk-pos"><option value="stay">بقاء في المحل</option><option value="atk">هجوم فقط</option><option value="mid">مساندة الوسط</option></select>
+            </div>
+            <div>
+                <label style="font-size:12px;">الوسط</label>
+                <select id="tac-mid-pos"><option value="stay">بقاء في المحل</option><option value="atk">هجوم</option><option value="def">دفاع</option></select>
+            </div>
+            <div>
+                <label style="font-size:12px;">الدفاع</label>
+                <select id="tac-def-pos"><option value="stay">بقاء في المحل</option><option value="up">دفاع متقدم</option><option value="wings">هجوم الظهيرين</option></select>
+            </div>
+        </div>
+
+        <hr style="border-color:#222; margin:20px 0;">
+
+        <div class="tac-sliders">
+            <div style="margin-bottom:20px;">
+                <label>العقلية: <span id="val-mental" style="color:var(--gold)">توازن</span></label>
+                <input type="range" id="tac-mental-slide" min="0" max="100" value="50" oninput="UI.updateTacLabels()">
+            </div>
+            
+            <div style="margin-bottom:20px;">
+                <label>سرعة اللعب: <span id="val-speed" style="color:var(--gold)">عادي</span></label>
+                <input type="range" id="tac-speed-slide" min="0" max="100" value="50" oninput="UI.updateTacLabels()">
+            </div>
+
+            <div style="margin-bottom:20px;">
+                <label>المهارة والمغامرة: <span id="val-risk" style="color:var(--gold)">عادية</span></label>
+                <input type="range" id="tac-risk-slide" min="0" max="100" value="50" oninput="UI.updateTacLabels()">
+            </div>
+        </div>
+
+        <div style="margin-top:20px;">
+            <label>إيقاع الضغط والتدخلات</label>
+            <select id="tac-press"><option value="safe">حذر</option><option value="normal">عادي</option><option value="aggr">شرس</option></select>
+        </div>
+
+        <button class="btn-gold" style="margin-top:25px;" onclick="Engine.saveTactics()">اعتماد التكتيك السري</button>
+    </div>
+</section>
+<section id="pg-specialists" class="page-content" style="display:none; padding:25px;">
+    <div class="content-card">
+        <h3 style="color:var(--gold); margin-bottom:20px;">المتخصصون</h3>
+        <div id="spec-fields"></div>
+        <button class="btn-gold" style="margin-top:20px;" onclick="Engine.saveSpecialists()">حفظ المتخصصين</button>
+    </div>
+</section>
+        </div>
+    </main>
+</div>
+
+<div id="main-modal" class="modal">
+    <div class="modal-content" id="modal-body"></div>
+</div>
+
+<div id="sim-overlay" class="screen" style="background:#000; z-index:9999; flex-direction:column; align-items:center; padding:20px; overflow-y:auto;">
+    <button class="turbo-btn" onclick="Engine.simSpeed = 50">⏩ تسريع المحاكاة (Turbo)</button>
+    <h1 id="sim-timer" style="font-family:'Orbitron'; font-size:50px; color:var(--gold); margin-top:10px;">00:00</h1>
+    <div style="display:flex; justify-content:space-around; width:100%; margin:20px 0; text-align:center;">
+        <div>
+            <h2 id="sim-h-name" style="color:var(--gold)">Home</h2>
+            <h1 id="sim-score-h" style="font-size:70px;">0</h1>
+            <div id="lineup-h" style="font-size:10px; color:#555; margin-top:10px; line-height:1.5;"></div>
+        </div>
+        <div style="font-size:40px; align-self:center;">VS</div>
+        <div>
+            <h2 id="sim-a-name" style="color:var(--blue)">Away</h2>
+            <h1 id="sim-score-a" style="font-size:70px;">0</h1>
+            <div id="lineup-a" style="font-size:10px; color:#555; margin-top:10px; line-height:1.5;"></div>
+        </div>
+    </div>
+    <div id="sim-log-box" style="width:100%; max-width:600px; flex:1; background:#0a0a0a; border:1px solid #222; overflow-y:auto; padding:20px; border-radius:15px; font-family:monospace;"></div>
+    <button id="end-sim-btn" class="btn-gold" style="width:200px; margin-top:20px; display:none;" onclick="location.reload()">العودة للرئيسية</button>
+</div>
+
+<script>
+const firebaseConfig = { 
+    apiKey: "AIzaSyDhh0xovPTP1WelHbxa4YqwSRIW7ZoBS_Y", 
+    databaseURL: "https://accountant-5a22d-default-rtdb.firebaseio.com" 
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+let ME = null;
+let APP_STATE = { league: [], taken: {}, user: null, currentSlot: null, table: {}, schedule: {} };
+const FORMATIONS = {
+    "442": [{t:90,l:50},{t:75,l:20},{t:75,l:40},{t:75,l:60},{t:75,l:80},{t:45,l:20},{t:45,l:40},{t:45,l:60},{t:45,l:80},{t:15,l:40},{t:15,l:60}],
+    "433": [{t:90,l:50},{t:75,l:20},{t:75,l:40},{t:75,l:60},{t:75,l:80},{t:45,l:30},{t:45,l:50},{t:45,l:70},{t:15,l:20},{t:10,l:50},{t:15,l:80}],
+    "352": [{t:90,l:50},{t:75,l:25},{t:75,l:50},{t:75,l:75},{t:45,l:15},{t:50,l:35},{t:50,l:50},{t:50,l:65},{t:45,l:85},{t:15,l:40},{t:15,l:60}],
+    "4231": [{t:90,l:50},{t:75,l:20},{t:75,l:40},{t:75,l:60},{t:75,l:80},{t:55,l:40},{t:55,l:60},{t:30,l:20},{t:25,l:50},{t:30,l:80},{t:10,l:50}],
+    "4141": [{t:90,l:50},{t:75,l:20},{t:75,l:40},{t:75,l:60},{t:75,l:80},{t:60,l:50},{t:35,l:20},{t:35,l:40},{t:35,l:60},{t:35,l:80},{t:15,l:50}],
+    "532": [{t:90,l:50},{t:75,l:15},{t:78,l:35},{t:78,l:50},{t:78,l:65},{t:75,l:85},{t:45,l:30},{t:45,l:50},{t:45,l:70},{t:15,l:40},{t:15,l:60}],
+    "541": [{t:90,l:50},{t:75,l:15},{t:78,l:35},{t:78,l:50},{t:78,l:65},{t:75,l:85},{t:45,l:20},{t:45,l:40},{t:45,l:60},{t:45,l:80},{t:15,l:50}],
+    "343": [{t:90,l:50},{t:75,l:25},{t:75,l:50},{t:75,l:75},{t:45,l:15},{t:45,l:40},{t:45,l:60},{t:45,l:85},{t:15,l:20},{t:10,l:50},{t:15,l:80}],
+    "451": [{t:90,l:50},{t:75,l:20},{t:75,l:40},{t:75,l:60},{t:75,l:80},{t:45,l:15},{t:45,l:33},{t:45,l:50},{t:45,l:67},{t:45,l:85},{t:15,l:50}],
+    "4321": [{t:90,l:50},{t:75,l:20},{t:75,l:40},{t:75,l:60},{t:75,l:80},{t:55,l:30},{t:55,l:50},{t:55,l:70},{t:30,l:40},{t:30,l:60},{t:10,l:50}],
+    "361": [{t:90,l:50},{t:75,l:25},{t:75,l:50},{t:75,l:75},{t:50,l:20},{t:55,l:40},{t:55,l:60},{t:50,l:80},{t:30,l:40},{t:30,l:60},{t:10,l:50}],
+    "334": [{t:90,l:50},{t:75,l:25},{t:75,l:50},{t:75,l:75},{t:50,l:30},{t:50,l:50},{t:50,l:70},{t:15,l:15},{t:10,l:40},{t:10,l:60},{t:15,l:85}],
+    "235": [{t:90,l:50},{t:75,l:35},{t:75,l:65},{t:55,l:30},{t:55,l:50},{t:55,l:70},{t:15,l:10},{t:15,l:30},{t:10,l:50},{t:15,l:70},{t:15,l:90}],
+    "41212": [{t:90,l:50},{t:75,l:20},{t:75,l:40},{t:75,l:60},{t:75,l:80},{t:60,l:50},{t:40,l:30},{t:40,l:70},{t:25,l:50},{t:10,l:40},{t:10,l:60}],
+    "4222": [{t:90,l:50},{t:75,l:20},{t:75,l:40},{t:75,l:60},{t:75,l:80},{t:55,l:35},{t:55,l:65},{t:30,l:35},{t:30,l:65},{t:10,l:40},{t:10,l:60}],
+    "3412": [{t:90,l:50},{t:75,l:25},{t:75,l:50},{t:75,l:75},{t:50,l:15},{t:50,l:40},{t:50,l:60},{t:50,l:85},{t:25,l:50},{t:10,l:40},{t:10,l:60}],
+    "4312": [{t:90,l:50},{t:75,l:20},{t:75,l:40},{t:75,l:60},{t:75,l:80},{t:55,l:30},{t:55,l:50},{t:55,l:70},{t:30,l:50},{t:10,l:40},{t:10,l:60}],
+    "3241": [{t:90,l:50},{t:75,l:25},{t:75,l:50},{t:75,l:75},{t:55,l:40},{t:55,l:60},{t:30,l:20},{t:30,l:40},{t:30,l:60},{t:30,l:80},{t:10,l:50}],
+    "523": [{t:90,l:50},{t:75,l:15},{t:78,l:35},{t:78,l:50},{t:78,l:65},{t:75,l:85},{t:50,l:40},{t:50,l:60},{t:15,l:20},{t:10,l:50},{t:15,l:80}],
+    "424": [{t:90,l:50},{t:75,l:20},{t:75,l:40},{t:75,l:60},{t:75,l:80},{t:50,l:40},{t:50,l:60},{t:15,l:15},{t:10,l:40},{t:10,l:60},{t:15,l:85}]
+};
+const Core = {
+    async login() {
+        const u = document.getElementById('in-user').value.trim();
+        const p = document.getElementById('in-pass').value;
+        if(!u || !p) return alert("أدخل البيانات");
+        ME = u;
+        if(u === "مايكل ماهر") document.getElementById('admin-gate').style.display = "flex";
+        
+        const snap = await db.ref('users/'+u).once('value');
+        if(!snap.exists()) {
+            await db.ref('users/'+u).set({ 
+                username: u, password: p, team: "", budget: 100000000, lineup: {}, formation: "433", 
+                tactics: { style: 'normal' }, stats: {w:0,d:0,l:0,pts:0,p:0} 
+            });
+        }
+        this.startSync();
+    },
+
+    startSync() {
+        db.ref('league_data').on('value', s => { APP_STATE.league = s.val() || []; UI.renderLeague(); this.refresh(); });
+        db.ref('taken_teams').on('value', s => { APP_STATE.taken = s.val() || {}; this.refresh(); });
+        db.ref('users/'+ME).on('value', s => { APP_STATE.user = s.val(); this.refresh(); });
+        db.ref('league_table').on('value', s => { APP_STATE.table = s.val() || {}; UI.renderLeague(); });
+        db.ref('schedule').on('value', s => { 
+            APP_STATE.schedule = s.val() || {}; 
+            UI.renderHome();
+            AutoEngine.checkAndRun();
+        });
+        db.ref('offers').on('value', s => { UI.renderOffers(s.val()); });
+    },
+
+    refresh() {
+        if(!APP_STATE.user) return;
+        if(APP_STATE.user.team === "") { UI.screen('scr-picker'); UI.renderPicker(); } 
+        else { UI.screen('scr-main'); UI.renderDashboard(); }
+    },
+
+    async pickTeam(name) {
+        
+        if(APP_STATE.taken[name]) return alert("محجوز!");
+        const teamData = APP_STATE.league.find(t => t.name === name);
+        await db.ref('taken_teams/'+name).set(ME);
+        // نقوم بعمل خريطة (Map) للاعبين لضمان انتقال حقل الـ pos
+const cleanSquad = teamData.players.map(p => ({
+    n: p.n,
+    p: p.p,
+    pos: p.pos || p.Pos || "---", // جلب المركز بأي صيغة
+    inj: 0,
+    susp: 0
+}));
+await db.ref('users/'+ME).update({ team: name, squad: cleanSquad });
+        await db.ref('league_table/'+name).transaction(c => c || {p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0});
+    }
+    
+};
+
+const Engine = {
+    simSpeed: 3333,
+                        async simulate(hName, aName, isAuto = false, isFriendly = false) {
+        if(!isAuto) UI.showSimOverlay(hName, aName);
+        this.simSpeed = isAuto ? 0 : 2500; 
+        let matchEvents = [];
+        const snapH = await db.ref('users').orderByChild('team').equalTo(hName).once('value');
+        const snapA = await db.ref('users').orderByChild('team').equalTo(aName).once('value');
+        const dataH = Object.values(snapH.val() || {})[0] || this.getCPUTeam(hName);
+        const dataA = Object.values(snapA.val() || {})[0] || this.getCPUTeam(aName);
+        
+        if(!isAuto) UI.renderSimLineups(dataH, dataA);
+        
+        const pH = this.calculatePower(dataH);
+        const pA = this.calculatePower(dataA);
+        
+        // نظام التقييمات
+        let ratings = { h: {}, a: {} };
+        const lineupH = Object.values(dataH.lineup || {});
+        const lineupA = Object.values(dataA.lineup || {});
+        
+        [...lineupH, ...lineupA].forEach(n => {
+            if(n) ratings[lineupH.includes(n) ? 'h' : 'a'][n] = 6.0 + (Math.random() * 0.5);
+        });
+
+        let sh = 0, sa = 0;
+
+        for (let m = 1; m <= 90; m++) {
+            if(!isAuto) {
+                await new Promise(r => setTimeout(r, this.simSpeed)); 
+                document.getElementById('sim-timer').innerText = m + ":00";
+            }
+
+            if (typeof ejectedPlayers === 'undefined') { var ejectedPlayers = { h: [], a: [] }; }
+
+            // 1. نظام الإصابات والتبديل التلقائي
+            if (Math.random() < 0.003) {
+                let side = Math.random() > 0.5 ? 'h' : 'a';
+                let sideLineup = side === 'h' ? lineupH : lineupA;
+                let activeOnPitch = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
+                let pName = activeOnPitch[Math.floor(Math.random() * activeOnPitch.length)];
+
+                if (pName) {
+                    let duration = Math.floor(Math.random() * 3) + 1;
+                    let sideData = side === 'h' ? dataH : dataA;
+                    let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
+                    let pIdx = sQ.findIndex(px => px.n === pName);
+                    if (pIdx !== -1) { 
+                        sQ[pIdx].inj = duration; 
+                        db.ref(`users/${sideData.username}/squad`).set(sQ); 
+                    }
+                    if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
+                    ejectedPlayers[side].push(pName);
+                    matchEvents.push({ time: m, player: pName, type: 'injury', team: side, text: 'إصابة' });
+                }
+            }
+
+            // 2. نظام الكروت (طرد وإنذارات)
+            let hRisk = (dataH.tactics?.press === 'aggr' ? 0.04 : 0.015);
+            if (Math.random() < hRisk) {
+                let side = (Math.random() > 0.5 ? 'h' : 'a');
+                let sideLineup = (side === 'h' ? lineupH : lineupA);
+                let activePlayers = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
+                let pName = activePlayers[Math.floor(Math.random() * activePlayers.length)];
+                if(pName) {
+                    let hasYellow = matchEvents.find(e => e.player === pName && e.type === 'yellow' && e.team === side);
+                    let isRed = (Math.random() < 0.05 || hasYellow); 
+                    if (isRed) {
+                        ejectedPlayers[side].push(pName);
+                        if(!isAuto) UI.addSimLog(`🟥 طرد! [${pName}]`, 'red');
+                        if (!isFriendly) {
+                            let sideData = (side === 'h' ? dataH : dataH);
+                            let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
+                            let pIdx = sQ.findIndex(px => px.n === pName);
+                            if(pIdx !== -1) { sQ[pIdx].susp = 1; db.ref(`users/${sideData.username}/squad`).set(sQ); }
+                        }
+                        matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
+                    } else {
+                        if(!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
+                        matchEvents.push({ time: m, player: pName, type: 'yellow', team: side, text: 'إنذار' });
+                    }
+                }
+            }
+
+            // 3. أهداف صاحب الأرض
+            if (Math.random() < (pH.atk / (pA.def + pA.gk + 2000)) * 0.25) {
+                sh++;
+                let scorer = this.pickRealisticScorer(lineupH.filter(p => !ejectedPlayers.h.includes(p)));
+                if(!isAuto) { 
+                    UI.addSimLog(`⚽ هدف! ${hName} - [${scorer}] (${m}')`, 'var(--gold)'); 
+                    document.getElementById('sim-score-h').innerText = sh; 
+                }
+                matchEvents.push({ time: m, text: `هدف: ${hName}`, player: scorer, type: 'goal', team: 'h' });
+            }
+
+            // 4. أهداف الضيف
+            if (Math.random() < (pA.atk / (pH.def + pH.gk + 2200)) * 0.18) {
+                sa++;
+                let scorer = this.pickRealisticScorer(lineupA.filter(p => !ejectedPlayers.a.includes(p)));
+                if(!isAuto) { 
+                    UI.addSimLog(`⚽ هدف! ${aName} - [${scorer}] (${m}')`, 'var(--blue)'); 
+                    document.getElementById('sim-score-a').innerText = sa; 
+                }
+                matchEvents.push({ time: m, text: `هدف: ${aName}`, player: scorer, type: 'goal', team: 'a' });
+            }
+        }
+
+        if(!isAuto) { 
+            UI.addSimLog("🏁 صافرة النهاية: " + sh + " - " + sa, "#fff"); 
+            document.getElementById('end-sim-btn').style.display = "block"; 
+        }
+
+        // حفظ كل شيء في الداتا
+        if (!isFriendly) {
+            await this.updateTable(hName, aName, sh, sa);
+                        // تحديث تلقائي لإصابات وإيقافات الفريقين بعد الماتش
+            await Admin.updateTeamStatus(dataH.username);
+            await Admin.updateTeamStatus(dataA.username);
+
+            // تحديث تلقائي: خصم جولة من المصابين والموقوفين للفريقين اللي لعبوا
+await Admin.updateTeamStatus(dataH.username);
+await Admin.updateTeamStatus(dataA.username);
+            for (let week in APP_STATE.schedule) {
+                let matches = APP_STATE.schedule[week].matches || [];
+                let mIdx = matches.findIndex(m => m.h === hName && m.a === aName);
+                if (mIdx !== -1) {
+                    await db.ref(`schedule/${week}/matches/${mIdx}`).update({
+                        done: true, scoreH: sh, scoreA: sa,
+                                                            
+                        events: matchEvents,
+                        ratings: ratings, // حفظ التقييمات
+                        lineups: { h: lineupH, a: lineupA } // حفظ التشكيلات لفتحها لاحقاً
+                    });
+                    break;
+                }
+            }
+        }
+    },
+
+
+    // دالة اختيار المسجل بناءً على المركز (واقعية)
+        pickRealisticScorer(lineup) {
+        const l = Object.values(lineup || {});
+        const squad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
+// تصفية اللاعبين المصابين أو الموقوفين من قائمة المسجلين المحتملين
+const available = l.filter(name => {
+    let p = squad.find(x => x.n === name);
+    return p && (p.inj || 0) <= 0 && (p.susp || 0) <= 0;
+});
+if(available.length > 0) return available[Math.floor(Math.random() * available.length)];
+        const r = Math.random();
+        if (r < 0.75) return l[10] || l[9] || l[0]; // المهاجمين (آخر التشكيلة)
+        if (r < 0.90) return l[6] || l[5]; // الوسط
+        return l[2] || l[1]; // الدفاع
+    },
+
+
+    getCPUTeam(name) {
+        const t = APP_STATE.league.find(x => x.name === name);
+        if(!t) return {team: name, squad: [], lineup: {}, tactics: {style:'normal'}};
+        const sorted = [...t.players].sort((a,b) => b.p - a.p);
+        let lineup = {};
+        sorted.slice(0, 11).forEach((p, i) => lineup[i] = p.n);
+        return { team: name, squad: t.players, lineup: lineup, tactics: {style: 'normal'} };
+    },
+        calculatePower(u) {
+        let p = { atk: 0, mid: 0, def: 0, gk: 0, synergy: 1.0 };
+        const lineup = u.lineup || {};
+        const squad = Array.isArray(u.squad) ? u.squad : Object.values(u.squad || {});
+
+        for (let i in lineup) {
+            const pName = lineup[i];
+            const pData = squad.find(x => x.n === pName);
+            
+            if (pData) {
+                let val = parseInt(pData.p) || 0;
+                let pos = (pData.pos || pData.Pos || "").toUpperCase();
+                let slotIdx = parseInt(i);
+                let multiplier = 1.0;
+
+                // --- منطق توزيع القوة بناءً على المركز ---
+                if (slotIdx === 0) { // خانة الحارس
+                    if (pos !== "GK") multiplier = 0.5; 
+                    p.gk += (val * multiplier);
+                } 
+                else if (slotIdx >= 1 && slotIdx <= 4) { // خانات الدفاع
+                    if (!["CB", "LB", "RB", "DF"].includes(pos)) multiplier = 0.7; 
+                    p.def += (val * multiplier);
+                } 
+                else if (slotIdx >= 5 && slotIdx <= 8) { // خانات الوسط
+                    if (!["CM", "LM", "RM", "CDM", "CAM", "MF"].includes(pos)) multiplier = 0.8; 
+                    p.mid += (val * multiplier);
+                } 
+                else { // خانات الهجوم
+                    if (!["ST", "RW", "LW", "CF", "FW"].includes(pos)) multiplier = 0.7;
+                    p.atk += (val * multiplier);
+                }
+            }
+        }
+
+        // تأثير التكتيكات
+        if (u.tactics?.style === 'attack') p.atk *= 1.2;
+        if (u.tactics?.style === 'defend') p.def *= 1.2;
+        if (u.specialists?.captain) p.synergy = 1.1; 
+
+        return p;
+    },
+
+ 
+    async updateTable(h, a, sh, sa) {
+        const up = async (n, pts, w, d, l, gf, ga) => {
+            await db.ref('league_table/'+n).transaction(s => {
+                s = s || {p:0, w:0, d:0, l:0, gf:0, ga:0, pts:0};
+                return { p:s.p+1, w:s.w+w, d:s.d+d, l:s.l+l, gf:s.gf+gf, ga:s.ga+ga, pts:s.pts+pts };
+            });
+        };
+        if(sh > sa) { await up(h,3,1,0,0,sh,sa); await up(a,0,0,0,1,sa,sh); }
+        else if(sa > sh) { await up(a,3,1,0,0,sa,sh); await up(h,0,0,0,1,sh,sa); }
+        else { await up(h,1,0,1,0,sh,sa); await up(a,1,0,1,0,sa,sh); }
+    },
+    async sendOffer(targetTeam, playerName, price) {
+        const toUser = APP_STATE.taken[targetTeam];
+        if(!toUser) return alert("هذا الفريق ليس له مدرب!");
+        const offerId = Date.now();
+        const path = `users/${toUser}/receivedOffers/${offerId}`;
+        await db.ref(path).set({ 
+            from: APP_STATE.user.team,
+            fromUser: ME,
+            player: playerName, 
+            price: price, 
+            status: 'pending',
+            id: offerId 
+        });
+        alert("تم إرسال العرض بنجاح!");
+    },
+    async postPress() {
+        const msg = document.getElementById('press-input').value;
+        if(!msg) return;
+        await db.ref('News').push({ user: ME, team: APP_STATE.user.team, msg: msg, time: new Date().toLocaleTimeString() });
+        document.getElementById('press-input').value = "";
+    }
+    ,async saveTactics() {
+    const tac = {
+        style: document.getElementById('tac-style').value,
+        mental: document.getElementById('tac-mental-slide').value,
+        speed: document.getElementById('tac-speed-slide').value,
+        risk: document.getElementById('tac-risk-slide').value,
+        atkPos: document.getElementById('tac-atk-pos').value,
+        midPos: document.getElementById('tac-mid-pos').value,
+        defPos: document.getElementById('tac-def-pos').value,
+        press: document.getElementById('tac-press').value
+    };
+    await db.ref(`users/${ME}/tactics`).set(tac);
+    alert("🚀 تم تسليم خطة المعركة للاعبين!");
+},
+async saveSpecialists() {
+    const spec = { captain: document.getElementById('spec-cap').value, penalties: document.getElementById('spec-pen').value, freekicks: document.getElementById('spec-free').value, corners: document.getElementById('spec-corn').value };
+    await db.ref(`users/${ME}/specialists`).set(spec);
+    alert("تم تعيين المتخصصين!");
+}
+};
+
+const AutoEngine = {
+    isProcessing: false, // قفل لمنع تداخل العمليات
+        async checkAndRun() {
+        if (this.isProcessing) return;
+        this.isProcessing = true;
+
+        // جلب وقت السيرفر الحقيقي من الفايربيز للتأكد أن المستخدم لم يغير ساعة جهازه
+        const serverTimeSnap = await db.ref('.info/serverTimeOffset').once('value');
+        const serverTime = Date.now() + serverTimeSnap.val();
+
+        const schedule = APP_STATE.schedule;
+
+        for (let week in schedule) {
+            let weekData = schedule[week];
+            // المقارنة الآن تتم بوقت السيرفر الموثوق
+            if (weekData.time && serverTime >= weekData.time) {
+                let matches = weekData.matches || [];
+                for (let i = 0; i < matches.length; i++) {
+                    let m = matches[i];
+                    if (!m.done && m.h !== "استراحة" && m.a !== "استراحة" && !m.running) {
+                        await db.ref(`schedule/${week}/matches/${i}`).update({ running: true });
+                        await Engine.simulate(m.h, m.a, true, false); 
+                        await db.ref(`schedule/${week}/matches/${i}`).update({ done: true, running: null });
+                    }
+                }
+            }
+        }
+        this.isProcessing = false;
+    }
+
+};
+
+
+const UI = {
+    screen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen')); document.getElementById(id).classList.add('active-screen'); },
+    page(id, el) {
+        document.querySelectorAll('.page-content').forEach(p => p.style.display = 'none');
+        const targetId = id === 'trophy' ? 'pg-league' : 'pg-'+id;
+        document.getElementById(targetId).style.display = 'block';
+        if(id === 'specialists') {
+    const squad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
+    const sp = APP_STATE.user.specialists || {};
+    const f = (id, label, val) => `<label>${label}</label><select id="${id}">${squad.map(p=>`<option value="${p.n}" ${val===p.n?'selected':''}>${p.n}</option>`).join('')}</select>`;
+    document.getElementById('spec-fields').innerHTML = f('spec-cap','القائد',sp.captain)+f('spec-pen','ركلات الجزاء',sp.penalties)+f('spec-free','الضربات الحرة',sp.freekicks)+f('spec-corn','الركلات الركنية',sp.corners);
+
+}
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        if(el) el.classList.add('active');
+        if(id === 'trophy' || id === 'league') this.renderLeague();    
+        if(id === 'matches') this.renderMatches();
+        if(id === 'transfers') this.renderTransfers();
+        if(id === 'press') this.renderPress();
+    },
+        async showTeamDetails(teamName) {
+        const snap = await db.ref('users').orderByChild('team').equalTo(teamName).once('value');
+        let squad = [];
+        if (snap.exists()) {
+            const userData = Object.values(snap.val())[0];
+            squad = Array.isArray(userData.squad) ? userData.squad : Object.values(userData.squad || {});
+        } else {
+            const teamData = APP_STATE.league.find(t => t.name === teamName);
+            squad = teamData ? teamData.players : [];
+        }
+        if (squad.length === 0) return;
+        let totalPower = 0;
+        squad.forEach(p => totalPower += (parseInt(p.p) || 0));
+        let avgPower = Math.round(totalPower / squad.length);
+        let h = `<div style="text-align:center;"><h2 style="color:var(--gold)">${teamName}</h2><div class="budget-tag" style="margin:10px auto; width:fit-content;">المعدل: ${avgPower}</div><div style="max-height:300px; overflow-y:auto;"><table style="width:100%"><thead><tr><th>اللاعب</th><th>المركز</th><th>القوة</th></tr></thead><tbody>${squad.sort((a,b)=>(parseInt(b.p)||0)-(parseInt(a.p)||0)).map(p=>`<tr><td style="text-align:right">${p.n}</td><td style="color:var(--blue)">${p.pos||'--'}</td><td style="color:var(--gold)">${p.p}</td></tr>`).join('')}</tbody></table></div></div>`;
+        this.modal(h);
+    },
+
+        renderLeague() {
+        const rows = document.getElementById('league-rows');
+        if(!rows) return;
+        
+        // جلب أسماء الفرق من البيانات المحقونة أولاً
+        let data = APP_STATE.league.map(t => {
+            const stats = APP_STATE.table[t.name] || {p:0, w:0, d:0, l:0, gf:0, ga:0, pts:0};
+            return { n: t.name, ...stats };
+        });
+
+        // الترتيب حسب النقاط ثم فارق الأهداف
+        data.sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga));
+        
+        rows.innerHTML = data.map((t, i) => `
+            <tr>
+                <td>${i+1}</td>
+          <td style="text-align:right; font-weight:bold; color:var(--gold); cursor:pointer;" onclick="UI.showTeamDetails('${t.n}')">  ${t.n}</td>
+                <td>${t.p}</td><td>${t.w}</td><td>${t.d}</td><td>${t.l}</td>
+                <td>${t.gf}/${t.ga}</td>
+                <td style="color:var(--gold); font-weight:900;">${t.pts}</td>
+            </tr>`).join('');
+    },
+
+        renderHome() {
+        const box = document.getElementById('next-match-box');
+        if (!APP_STATE.schedule || Object.keys(APP_STATE.schedule).length === 0) {
+            box.innerHTML = "لا يوجد مباريات مجدولة";
+            return;
+        }
+
+        // 1. ترتيب الجولات رقمياً (1, 2, 3...)
+        const sortedWeeks = Object.keys(APP_STATE.schedule).sort((a, b) => {
+            return parseInt(a.split('_')[1]) - parseInt(b.split('_')[1]);
+        });
+
+        let nextMatch = null;
+        let weekName = "";
+
+        // 2. البحث عن أول مباراة غير منتهية لفريق المستخدم في الجولات المرتبة
+        for (let w of sortedWeeks) {
+            const matches = APP_STATE.schedule[w].matches || [];
+            const m = matches.find(x => (x.h === APP_STATE.user.team || x.a === APP_STATE.user.team) && !x.done);
+            if (m) {
+                nextMatch = m;
+                weekName = w.replace('_', ' '); // تحويل الجولة_2 إلى الجولة 2
+                break;
+            }
+        }
+
+        if (nextMatch) {
+            box.innerHTML = `
+                <div style="background: rgba(255,215,0,0.05); padding: 15px; border-radius: 15px; border: 1px dashed var(--gold);">
+                    <h4 style="color:var(--gold); font-family:'Orbitron'; margin-bottom:10px;">${weekName}</h4>
+                    <div style="display:flex; justify-content:center; align-items:center; gap:20px;">
+                        <span style="font-weight:bold; font-size:18px;">${nextMatch.h}</span>
+                        <span style="color:#555; font-family:'Orbitron'">VS</span>
+                        <span style="font-weight:bold; font-size:18px;">${nextMatch.a}</span>
+                    </div>
+                </div>`;
+        } else {
+            box.innerHTML = "<p style='color:#666;'>لقد أنهيت جميع مبارياتك في الدوري!</p>";
+        }
+    },
+
+    renderOffers(offers) {
+        const box = document.getElementById('offers-box');
+        const myOffers = APP_STATE.user.receivedOffers;
+        if(!myOffers) { box.innerHTML = "البريد فارغ"; return; }
+        let h = "";
+        Object.entries(myOffers).forEach(([id, o]) => {
+            if(o.status === 'pending') {
+                h += `<div class="offer-card">
+                        <b>${o.from}</b> يطلب <b>${o.player}</b> مقابل <b>${o.price}$</b><br>
+                        <button onclick="UI.handleOffer('${id}', true)" class="btn-gold" style="width:70px; padding:5px; margin-top:5px;">قبول</button>
+                        <button onclick="UI.handleOffer('${id}', false)" class="btn-gold" style="width:70px; padding:5px; background:red;">رفض</button>
+                      </div>`;
+            }
+        });
+        box.innerHTML = h || "لا توجد عروض جديدة";
+    },
+
+        async handleOffer(offerId, accept) {
+        const offerPath = `users/${ME}/receivedOffers/${offerId}`;
+        if(!accept) {
+            await db.ref(offerPath).update({ status: 'rejected' });
+            alert("تم رفض العرض");
+            return;
+        }
+
+        const snap = await db.ref(offerPath).once('value');
+        const o = snap.val();
+        if(!o) return alert("خطأ: العرض غير موجود!");
+
+        const buyerSnap = await db.ref('users/' + o.fromUser).once('value');
+        let bKey, bData;
+
+        if(buyerSnap.exists()) {
+            bKey = o.fromUser;
+            bData = buyerSnap.val();
+        } else {
+            const secondarySnap = await db.ref('users').orderByChild('team').equalTo(o.from).once('value');
+            if(!secondarySnap.exists()) return alert("خطأ: لم يتم العثور على المشتري!");
+            bKey = Object.keys(secondarySnap.val())[0];
+            bData = Object.values(secondarySnap.val())[0];
+        }
+
+        if(bData.budget < o.price) return alert("المشتري لا يملك ميزانية كافية حالياً!");
+
+        const playerFullData = APP_STATE.user.squad.find(x => x.n === o.player);
+        if(!playerFullData) return alert("خطأ: اللاعب لم يعد موجوداً في فريقك!");
+
+        // --- الجزء المعدل لضمان عدم تداخل القوة والمركز ---
+        const cleanPlayerData = {
+            n: playerFullData.n,
+            p: parseInt(playerFullData.p) || 0, // التأكد أن القوة رقم
+            pos: playerFullData.pos || "AM"     // التأكد من وجود المركز بشكل منفصل
+        };
+
+        const updates = {};
+        // 1. حذف اللاعب من البائع وزيادة ميزانيته
+        updates[`users/${ME}/squad`] = APP_STATE.user.squad.filter(x => x.n !== o.player);
+        updates[`users/${ME}/budget`] = APP_STATE.user.budget + parseInt(o.price);
+
+        // 2. إضافة اللاعب للمشتري بشكل مصفوفة نظيفة
+        const currentBuyerSquad = Array.isArray(bData.squad) ? bData.squad : Object.values(bData.squad || {});
+        updates[`users/${bKey}/squad`] = [...currentBuyerSquad, cleanPlayerData];
+        
+        // 3. خصم المبلغ من المشتري وتحديث حالة العرض
+        updates[`users/${bKey}/budget`] = bData.budget - parseInt(o.price);
+        updates[offerPath + '/status'] = 'accepted';
+
+        // 4. إزالة اللاعب من التشكيلة الأساسية للبائع إذا كان موجوداً
+        let currentLineup = APP_STATE.user.lineup || {};
+        for(let slot in currentLineup) {
+            if(currentLineup[slot] === o.player) {
+                updates[`users/${ME}/lineup/${slot}`] = null;
+            }
+        }
+
+        try {
+            await db.ref().update(updates);
+            alert(`تمت الصفقة! ${o.player} انتقل بنجاح بقوة ${cleanPlayerData.p}`);
+        } catch(e) {
+            alert("فشلت العملية: " + e.message);
+        }
+    },
+
+            renderMatches() {
+        const container = document.getElementById('matches-list-container');
+        if(!container) return;
+        
+        if(!APP_STATE.schedule) {
+            container.innerHTML = "<h3>📅 جدول مباريات الدوري</h3><p>لا يوجد جدول حالياً</p>";
+            return;
+        }
+
+        let h = "<h3>📅 جدول مباريات الدوري</h3>";
+
+        // ترتيب الجولات رقمياً (الجولة 1، ثم 2...)
+        const sortedWeeks = Object.keys(APP_STATE.schedule).sort((a, b) => {
+            return parseInt(a.split('_')[1]) - parseInt(b.split('_')[1]);
+        });
+
+        sortedWeeks.forEach(week => {
+            const weekData = APP_STATE.schedule[week];
+            
+            // تحويل وقت الجولة لتاريخ مقروء
+            const startTime = weekData.time ? new Date(weekData.time).toLocaleString('ar-EG', {
+                weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+            }) : "لم يحدد بعد";
+
+            h += `
+            <div style="margin-top:25px; background: #111; border-radius: 10px; padding: 10px; border: 1px solid #222;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:8px; margin-bottom:10px;">
+                    <span style="color:var(--gold); font-weight:bold; font-family:'Orbitron'">${week.replace('_', ' ')}</span>
+                    <span style="font-size:12px; color:#777;"><i class="fas fa-clock"></i> ${startTime}</span>
+                </div>`;
+
+            weekData.matches.forEach(m => {
+                // التأكد من وجود النتيجة فعلياً قبل العرض، وإلا عرض VS
+                const hasScore = m.done && (m.scoreH !== undefined && m.scoreA !== undefined);
+                
+                const scoreDisplay = hasScore ? 
+                    `<b style="color:var(--gold); font-size:18px; letter-spacing:2px;">${m.scoreH} - ${m.scoreA}</b>` : 
+                    `<b style="color:#444; font-size:14px;">VS</b>`;
+
+                h += `
+     <div class="player-row" style="background: rgba(255,255,255,0.02); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; padding: 10px 15px; cursor:pointer;" onclick="UI.showMatchDetails('${m.h}', '${m.a}', '${m.done}', ${m.scoreH || 0}, ${m.scoreA || 0})">
+                    <span style="width:38%; text-align:right; font-weight:bold; ${m.h === APP_STATE.user.team ? 'color:var(--gold)' : ''}">${m.h}</span>
+                    <div style="width:24%; text-align:center; background:#000; border-radius:5px; padding:3px 0;">${scoreDisplay}</div>
+                    <span style="width:38%; text-align:left; font-weight:bold; ${m.a === APP_STATE.user.team ? 'color:var(--gold)' : ''}">${m.a}</span>
+                </div>`;
+            });
+            h += `</div>`;
+        });
+        container.innerHTML = h;
+    },
+
+
+
+
+    renderTransfers() {
+        const list = document.getElementById('transfer-market-list');
+        let h = "";
+        APP_STATE.league.forEach(team => {
+            if(team.name === APP_STATE.user.team) return;
+            h += `<h4 style="color:var(--gold); margin-top:20px; border-bottom:1px solid #333;">${team.name}</h4>`;
+            team.players.forEach(p => { h += `<div class="player-row" onclick="UI.openOfferDialog('${team.name}','${p.n}')"><span>${p.n} (قوة: ${p.p})</span> <button class="btn-gold" style="width:100px; padding:5px">شراء</button></div>`; });
+        });
+        list.innerHTML = h;
+    },
+    openOfferDialog(t, p) { const pr = prompt(`كم ستعرض لضم ${p}؟`); if(pr) Engine.sendOffer(t, p, pr); },
+    renderPicker() {
+        const grid = document.getElementById('team-list');
+        grid.innerHTML = APP_STATE.league.map(t => {
+            const isTaken = APP_STATE.taken[t.name];
+            return `<div class="team-box ${isTaken?'locked':''}" onclick="Core.pickTeam('${t.name}')"><b>${t.name}</b><br><small>${isTaken || 'متاح حالياً'}</small></div>`;
+        }).join('');
+    },
+    renderDashboard() {
+        document.getElementById('ui-my-team').innerText = APP_STATE.user.team;
+        document.getElementById('ui-my-name').innerText = APP_STATE.user.username;
+        document.getElementById('ui-money').innerText = APP_STATE.user.budget.toLocaleString();
+        this.renderPitch();
+        this.renderSquadList();
+        this.updateTeamPower();
+
+    },
+                renderPitch() {
+        const layout = document.getElementById('pitch-layout'); 
+        const bar = document.getElementById('formation-bar');
+        if(!layout || !APP_STATE.user) return;
+
+        const currentForm = APP_STATE.user.formation || "433";
+        bar.innerHTML = Object.keys(FORMATIONS).map(f => `<button class="form-btn ${f === currentForm ? 'active' : ''}" onclick="UI.setFormation('${f}')">${f}</button>`).join('');
+
+        layout.innerHTML = "";
+        const slots = FORMATIONS[currentForm];
+        const squad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
+
+        // رسم اللاعبين الأساسيين الـ 11
+        slots.forEach((s, i) => {
+            const playerName = APP_STATE.user.lineup?.[i];
+            const pData = squad.find(p => p.n === playerName);
+            layout.innerHTML += `
+                <div class="player-slot ${playerName ? 'occupied' : ''}" style="top:${s.t}%; left:${s.l}%" onclick="UI.openPlayerSelection(${i})">
+                    <div style="font-size:8px; color:#fff; opacity:0.8; margin-bottom:-5px;">${pData ? (pData.pos || pData.Pos || '') : ''}</div>
+                    <b style="color:var(--gold)">${pData ? pData.p : i+1}</b>
+                    ${pData ? `<span style="font-size:8px; display:block; overflow:hidden; text-overflow:ellipsis;">${pData.n}</span>` : ""}
+                </div>`;
+        });
+
+        // --- إضافة دكة البدلاء (7 مقاعد) ---
+        let benchHtml = `<div style="position:absolute; bottom:-75px; left:0; right:0; display:flex; justify-content:center; gap:4px; padding:8px; background:rgba(0,0,0,0.7); border-radius:10px; border:1px solid #444;">`;
+        const benchLabels = ["GK", "DF", "DF", "MF", "MF", "FW", "FW"]; 
+        
+        for(let b=11; b<18; b++) {
+            const bName = APP_STATE.user.lineup?.[b];
+            const bData = squad.find(p => p.n === bName);
+            benchHtml += `
+                <div onclick="UI.openPlayerSelection(${b})" style="width:46px; height:52px; background:#111; border:1px solid ${bName?'var(--gold)':'#333'}; border-radius:6px; font-size:8px; text-align:center; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                    <div style="color:var(--blue); font-weight:bold; margin-bottom:2px;">${benchLabels[b-11]}</div>
+                    <div style="color:#fff; width:90%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">${bData ? bData.n : 'بديل'}</div>
+                </div>`;
+        }
+        layout.innerHTML += benchHtml + `</div>`;
+    },
+
+
+
+    updateTeamPower() {
+    if (!APP_STATE.user || !APP_STATE.user.lineup) return;
+    const lineup = APP_STATE.user.lineup;
+    const squad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
+    
+    let totalAdjustedPower = 0;
+    let count = 0;
+
+    for (let i = 0; i < 11; i++) {
+        const pName = lineup[i];
+        const pData = squad.find(x => x.n === pName);
+        if (pData) {
+            let val = parseInt(pData.p) || 0;
+            let pos = (pData.pos || pData.Pos || "").toUpperCase();
+            let multiplier = 1.0;
+
+            // نفس منطق دالة المحاكاة لضمان تطابق الأرقام
+            if (i === 0) { if (pos !== "GK") multiplier = 0.5; } 
+            else if (i >= 1 && i <= 4) { if (!["CB", "LB", "RB", "DF"].includes(pos)) multiplier = 0.7; } 
+            else if (i >= 5 && i <= 8) { if (!["CM", "LM", "RM", "CDM", "CAM", "MF"].includes(pos)) multiplier = 0.8; } 
+            else { if (!["ST", "RW", "LW", "CF", "FW"].includes(pos)) multiplier = 0.7; }
+
+            totalAdjustedPower += (val * multiplier);
+            count++;
+        }
+    }
+
+    const avg = count > 0 ? Math.round(totalAdjustedPower / 11) : 0;
+    
+    if(document.getElementById('ui-team-power')) document.getElementById('ui-team-power').innerText = avg;
+    if(document.getElementById('ui-power-bar')) document.getElementById('ui-power-bar').style.width = avg + "%";
+},
+
+    renderSquadList() { 
+    const squad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
+    document.getElementById('full-player-list').innerHTML = squad.map(p => `
+        <div class="player-row">
+            <div style="text-align:right">
+                <span style="display:block; font-weight:bold;">${p.n}</span>
+                <small style="color:var(--blue); font-size:10px;">مركز: ${p.pos || p.Pos || '---'}</small>
+            </div>
+            <b style="color:var(--gold); font-size:18px;">${p.p}</b>
+        </div>`).join(''); 
+},
+
+
+    renderSimLineups(h, a) {
+        document.getElementById('sim-h-name').innerText = h.team;
+        document.getElementById('sim-a-name').innerText = a.team;
+        document.getElementById('lineup-h').innerText = Object.values(h.lineup || {}).join(' - ');
+        document.getElementById('lineup-a').innerText = Object.values(a.lineup || {}).join(' - ');
+    },
+    showSimOverlay(h, a) {
+        this.screen('sim-overlay');
+        document.getElementById('sim-score-h').innerText = "0";
+        document.getElementById('sim-score-a').innerText = "0";
+        document.getElementById('sim-log-box').innerHTML = "🎤 صافرة البداية...";
+        document.getElementById('end-sim-btn').style.display = "none";
+    },
+    addSimLog(m, c) {
+        const l = document.getElementById('sim-log-box');
+        l.innerHTML = `<div style="color:${c}; margin-bottom:5px;">${m}</div>` + l.innerHTML;
+    },
+    showFriendly() {
+        let h = `<h3>مباراة ودية</h3><p>اختر الخصم لمحاكاة تجريبية:</p>`;
+        APP_STATE.league.forEach(t => { if(t.name !== APP_STATE.user.team) h += `<button class="btn-gold" style="margin-top:10px;" onclick="UI.runFriendly('${t.name}')">${t.name}</button>`; });
+        this.modal(h);
+    },
+        runFriendly(opp) { this.closeModal(); Engine.simulate(APP_STATE.user.team, opp, false, true); },
+    showAdmin() {
+        this.modal(`<h3>لوحة القائد مايكل</h3><button class="btn-gold" onclick="Admin.resetTable()">تصفير الجدول</button><textarea id="json-inj" style="height:150px; margin-top:10px;" placeholder="JSON"></textarea><button class="btn-gold" onclick="Admin.doInject()">حقن الفرق</button><button class="btn-gold" style="background:red; margin-top:10px;" onclick="Admin.generateDraw()">إجراء القرعة</button>
+        <button class="btn-gold" style="background:blue; margin-top:10px;" onclick="Admin.updateAllPlayersStatus()">تحديث إصابات اللاعبين</button>
+`);
+        
+    },
+        renderPress() {
+        // قمنا بتوحيد المسار ليكون 'News' كما هو في دالة الإرسال
+        db.ref('News').limitToLast(15).on('value', s => {
+            const feed = document.getElementById('press-feed');
+            if(feed) {
+                const data = s.val() || {};
+                // عرض الرسائل بترتيب تنازلي (الأحدث فوق)
+                feed.innerHTML = Object.values(data).reverse().map(m => `
+                    <div class="offer-card" style="border-right-color: var(--gold); margin-bottom: 8px;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px; color:#777;">
+                            <b>${m.team}</b>
+                            <span>${m.time || ''}</span>
+                        </div>
+                        <div style="margin-top:5px; color:#fff;">${m.msg}</div>
+                    </div>
+                `).join('');
+            }
+        });
+    },
+
+    openPlayerSelection(sIdx) {
+    APP_STATE.currentSlot = sIdx;
+    let h = "<h3>اختر لاعب</h3>";
+    const squad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
+    
+    squad.forEach(p => {
+        let status = "";
+        let isDisabled = false;
+        if (p.inj > 0) { 
+            status = ` 🚑 (مصاب: باقي ${p.inj} جولة)`; 
+            isDisabled = true; 
+        } else if (p.susp > 0) {
+            status = ` 🟥 (موقوف جولة)`;
+            isDisabled = true;
+        } else {
+            status = ` ✅ (جاهز)`; 
+        }
+
+
+        h += `<div class="player-row" style="${isDisabled ? 'opacity:0.5; cursor:not-allowed;' : ''}" 
+              onclick="${isDisabled ? "alert('اللاعب غير متاح!')" : `UI.confirmPlayerSelection('${p.n}')`}">
+              ${p.n} (قوة: ${p.p})${status}
+              </div>`;
+    });
+    this.modal(h);
+},
+
+    async confirmPlayerSelection(n) {
+        let currentLineup = APP_STATE.user.lineup || {};
+        for (let slotId in currentLineup) { if (currentLineup[slotId] === n) await db.ref('users/' + ME + '/lineup/' + slotId).remove(); }
+        await db.ref('users/' + ME + '/lineup/' + APP_STATE.currentSlot).set(n);
+        this.closeModal();
+    },
+    async setFormation(f) { await db.ref(`users/${ME}/formation`).set(f); },
+    modal(h) { 
+        document.getElementById('modal-body').innerHTML = h + `<button class="btn-gold" style="margin-top:20px; background:#333;" onclick="UI.closeModal()">إغلاق</button>`; 
+        document.getElementById('main-modal').style.display="flex"; 
+    },
+        closeModal() { document.getElementById('main-modal').style.display="none"; },
+        updateTacLabels() {
+            const m = document.getElementById('tac-mental-slide').value;
+            const s = document.getElementById('tac-speed-slide').value;
+            const r = document.getElementById('tac-risk-slide').value;
+
+            const getLbl = (v, arr) => {
+                const index = Math.floor(v / 21);
+                return arr[index] || arr[arr.length - 1];
+            };
+
+            if(document.getElementById('val-mental')) document.getElementById('val-mental').innerText = getLbl(m, ["دفاع باستماتة", "دفاع", "توازن", "هجوم", "هجوم شرس"]);
+            if(document.getElementById('val-speed')) document.getElementById('val-speed').innerText = getLbl(s, ["بطيء جداً", "بطيء", "عادي", "سريع", "سريع جداً"]);
+            if(document.getElementById('val-risk')) document.getElementById('val-risk').innerText = getLbl(r, ["معدومة", "قليلة", "عادية", "كثيرة", "كثيرة جداً"]);
+        },
+
+                async showMatchDetails(hName, aName, isDone, sH, sA) {
+        if (isDone === 'false' || isDone === false || isDone === undefined) return; 
+
+        let matchData = null;
+        // البحث عن بيانات المباراة في الجدول الزمني
+        for (let w in APP_STATE.schedule) {
+            let matches = APP_STATE.schedule[w].matches || [];
+            matchData = matches.find(m => m.h === hName && m.a === aName && m.done);
+            if (matchData) break;
+        }
+
+        if (!matchData) return alert("بيانات المباراة غير متوفرة حالياً");
+
+        // 1. بناء سجل الأحداث (أهداف وكروت)
+        let eventsHtml = (matchData.events || []).map(e => `
+            <div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #222; font-size:13px;">
+                <span style="color:var(--gold); width:40px;">${e.time}'</span>
+                <span style="flex:1; text-align:right;">
+                    ${e.type === 'goal' ? '⚽' : (e.type === 'red' ? '🟥' : '🟨')} 
+                    <b>${e.player}</b> (${e.text})
+                </span>
+            </div>
+        `).join('') || "<p style='text-align:center; color:#555;'>لا توجد أحداث هامة</p>";
+
+        // 2. بناء عرض تقييمات اللاعبين
+        let ratingsHtml = `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:15px;">`;
+        
+        const sides = [{key: 'h', name: hName}, {key: 'a', name: aName}];
+        
+        sides.forEach(side => {
+            let playersRatings = matchData.ratings ? matchData.ratings[side.key] : null;
+            
+            ratingsHtml += `<div style="background:#050505; padding:10px; border-radius:10px; border:1px solid #222;">
+                <h6 style="color:var(--gold); border-bottom:1px solid #333; margin-bottom:8px; padding-bottom:4px; font-size:12px;">${side.name}</h6>`;
+            
+            if (playersRatings) {
+                for (let playerName in playersRatings) {
+                    let score = playersRatings[playerName];
+                    ratingsHtml += `
+                        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px; border-bottom:1px solid #111; padding:2px 0;">
+                            <span style="color:#bbb;">${playerName}</span>
+                            <b style="color:${score >= 7.5 ? '#00ff00' : (score >= 6.5 ? '#fff' : '#ff4444')}">${score.toFixed(1)}</b>
+                        </div>`;
+                }
+            } else {
+                ratingsHtml += `<p style="font-size:10px; color:#444;">لا توجد تقييمات</p>`;
+            }
+            ratingsHtml += `</div>`;
+        });
+        ratingsHtml += `</div>`;
+
+        // 3. عرض المودال النهائي
+        this.modal(`
+            <div style="text-align:center;">
+                <h3 style="color:var(--gold); font-family:'Orbitron'; margin-bottom:15px;">تفاصيل الملحمة</h3>
+                
+                <div style="display:flex; justify-content:space-around; align-items:center; margin-bottom:20px; background:linear-gradient(180deg, #111, #000); padding:20px; border-radius:15px; border:1px solid var(--gold); box-shadow: 0 0 15px rgba(255,215,0,0.1);">
+                    <div style="flex:1;">
+                        <h4 style="font-size:14px;">${hName}</h4>
+                        <h1 style="font-size:45px; color:#fff;">${sH}</h1>
+                    </div>
+                    <div style="font-family:'Orbitron'; color:var(--gold); font-size:20px; opacity:0.5;">VS</div>
+                    <div style="flex:1;">
+                        <h4 style="font-size:14px;">${aName}</h4>
+                        <h1 style="font-size:45px; color:#fff;">${sA}</h1>
+                    </div>
+                </div>
+
+                <div style="text-align:right; max-height:350px; overflow-y:auto; padding-left:10px;">
+                    <h5 style="color:var(--blue); border-right:3px solid var(--blue); padding-right:10px; margin-bottom:10px; font-size:14px;">مجريات اللقاء</h5>
+                    ${eventsHtml}
+                    
+                    <h5 style="color:var(--gold); border-right:3px solid var(--gold); padding-right:10px; margin-top:25px; margin-bottom:10px; font-size:14px;">تقييمات الأداء</h5>
+                    ${ratingsHtml}
+                </div>
+            </div>
+        `);
+    }
+
+
+
+    
+};
+
+const Admin = {
+    // دالة تحديث حالة اللاعبين (خصم جولة من الإصابة/الإيقاف)
+    updateTeamStatus: async function(userName) {
+        if(!userName) return;
+        const snap = await db.ref(`users/${userName}`).once('value');
+        const userData = snap.val();
+        if(!userData || !userData.squad) return;
+        
+        let squad = Array.isArray(userData.squad) ? userData.squad : Object.values(userData.squad || {});
+        let changed = false;
+
+        squad.forEach(p => {
+            if(p.inj > 0) { p.inj--; changed = true; }
+            if(p.susp > 0) { p.susp--; changed = true; }
+        });
+        
+        if(changed) {
+            await db.ref(`users/${userName}/squad`).set(squad);
+            console.log(`✅ تم تحديث حالة لاعبي فريق: ${userData.team}`);
+        }
+    },
+
+    async resetTable() { if(confirm("تصفير الجدول؟")) await db.ref('league_table').remove(); },
+    async doInject() { try { await db.ref('league_data').set(JSON.parse(document.getElementById('json-inj').value)); alert("تم!"); } catch(e){alert("Error");} },
+    async generateDraw() {
+        let names = APP_STATE.league.map(t => t.name);
+        if(names.length < 2) return alert("من فضلك احقن الفرق أولاً!");
+        if(names.length % 2 !== 0) names.push("استراحة");
+        let sch = {}; let now = new Date(); now.setHours(20, 0, 0, 0); 
+        let dayMs = 24 * 60 * 60 * 1000; let totalRounds = names.length - 1;
+        for(let w = 1; w <= totalRounds; w++) {
+            let weekKey = `الجولة_${w}`;
+            let roundTime = now.getTime() + ((w - 1) * dayMs);
+            sch[weekKey] = { time: roundTime, matches: [] };
+            for(let i = 0; i < names.length / 2; i++) {
+                sch[weekKey].matches.push({ h: names[i], a: names[names.length - 1 - i], done: false });
+            }
+            names.splice(1, 0, names.pop());
+        }
+        await db.ref('schedule').set(sch); alert("تمت الجدولة بنجاح!");
+        Admin.updateAllPlayersStatus = async function() {
+    const snap = await db.ref('users').once('value');
+    const users = snap.val();
+    for(let u in users) {
+        let squad = Array.isArray(users[u].squad) ? users[u].squad : Object.values(users[u].squad || {});
+        squad.forEach(p => { if(p.inj > 0) p.inj--; if(p.susp > 0) p.susp--; });
+        await db.ref(`users/${u}/squad`).set(squad);
+    }
+    console.log("تم تحديث حالة اللاعبين لجميع الفرق");
+};
+    }
+};
+
+setInterval(() => { const c = document.getElementById('digital-clock'); if(c) c.innerText = new Date().toLocaleTimeString(); }, 1000);
+setInterval(() => { AutoEngine.checkAndRun(); }, 60000);
+</script>
+</body>
+</html>
+
