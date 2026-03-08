@@ -960,6 +960,29 @@ const UI = {
 
     },
                 renderPitch() {
+                // كود التنظيف التلقائي للتشكيلة
+if (APP_STATE.user && APP_STATE.user.lineup) {
+    const squad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
+    let lineupChanged = false;
+    let currentLineup = { ...APP_STATE.user.lineup };
+
+    for (let slot in currentLineup) {
+        const pName = currentLineup[slot];
+        const pData = squad.find(x => x.n === pName);
+        
+        // إذا كان اللاعب مصاباً أو موقوفاً، يتم إزالته من التشكيلة فوراً
+        if (pData && (pData.inj > 0 || pData.susp > 0)) {
+            delete currentLineup[slot];
+            lineupChanged = true;
+        }
+    }
+
+    if (lineupChanged) {
+        db.ref(`users/${ME}/lineup`).set(currentLineup);
+        console.log("⚠️ تم استبعاد اللاعبين غير الجاهزين من التشكيلة تلقائياً");
+    }
+}
+
         const layout = document.getElementById('pitch-layout'); 
         const bar = document.getElementById('formation-bar');
         if(!layout || !APP_STATE.user) return;
