@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSM ULTIMATE PRO 2026 | MICHAEL MAHER EDITION</title>
+    <title>GAFFER</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -103,8 +103,9 @@
 
 <div id="scr-login" class="screen active-screen">
     <div class="login-card">
-        <h1 style="font-family:'Orbitron'; color:var(--gold); font-size: 35px;">OSM MASTER</h1>
-        <p style="color:#666; margin-bottom: 30px;">MICHAEL MAHER EDITION 2026</p>
+        <h1 style="font-family:'Orbitron'; color:var(--gold); font-size: 35px;">GAFFER</h1>
+        <p style="color:#666; margin-bottom: 30px;">BY MICHAEL MAHER</p>
+                <p style="color:#666; margin-bottom: 18px;">كن سيد المدربين</p>
         <input type="text" id="in-user" placeholder="اسم المدرب">
         <input type="password" id="in-pass" placeholder="كلمة السر">
         <button class="btn-gold" onclick="Core.login()">دخول القائد</button>
@@ -400,7 +401,85 @@ await db.ref('users/'+ME).update({ team: name, squad: cleanSquad });
 
 const Engine = {
     simSpeed: 3333,
-                        async simulate(hName, aName, isAuto = false, isFriendly = false) {
+
+    // 1. إرسال العرض وتفعيل رد الكمبيوتر أو المدرب (معدلة لمنع التكرار)
+    async sendOffer(targetTeam, playerName, price) {
+        const now = Date.now();
+        let currentWeek = "الجولة_1"; 
+        
+        // تحديد الجولة الحالية بدقة بناءً على الجدول
+        for (let week in APP_STATE.schedule) {
+            if (now >= APP_STATE.schedule[week].time) currentWeek = week;
+        }
+
+        // المنع الفوري لو المستخدم أرسل عرضاً في هذه الجولة بالفعل
+        if (APP_STATE.user.lastOfferWeek === currentWeek) {
+            return alert(`⚠️ مسموح بعرض واحد فقط في الجولة [${currentWeek.replace('_', ' ')}]. انتظر الجولة القادمة!`);
+        }
+
+        const offerPrice = parseInt(price);
+        if (!offerPrice || offerPrice <= 0) return alert("أدخل مبلغاً صالحاً!");
+        if (offerPrice > APP_STATE.user.budget) return alert("ميزانيتك لا تسمح!");
+
+        const toUser = APP_STATE.taken[targetTeam]; // هل الفريق لمدرب حقيقي؟
+
+        if (toUser) {
+            // لو مدرب حقيقي: نبعت العرض لبريده
+            const offerId = Date.now();
+            await db.ref(`users/${toUser}/receivedOffers/${offerId}`).set({
+                from: APP_STATE.user.team, fromUser: ME, player: playerName,
+                price: offerPrice, status: 'pending', id: offerId, week: currentWeek
+            });
+            // تسجيل إن المستخدم استهلك عرضه في هذه الجولة
+            await db.ref(`users/${ME}`).update({ lastOfferWeek: currentWeek });
+            alert("تم إرسال العرض لمدرب الفريق.. انتظر رده في البريد.");
+        } else {
+            // لو كمبيوتر: نخليه يقرر فوراً
+            this.ProcessCPUDecision(targetTeam, playerName, offerPrice, currentWeek);
+        }
+    },
+
+    // 2. دالة اتخاذ القرار (الرد التلقائي من الكمبيوتر)
+    ProcessCPUDecision(teamName, playerName, price, week) {
+        const teamData = APP_STATE.league.find(t => t.name === teamName);
+        const player = teamData.players.find(p => p.n === playerName);
+        if (!player) return;
+
+        // حساب القيمة العادلة
+        const fairValue = Math.pow(player.p, 2) * 1100;
+        const ratio = price / fairValue;
+
+        setTimeout(async () => {
+            let accepted = false;
+            
+            if (ratio >= 2.0) accepted = Math.random() < 0.7; // ضعف القيمة
+            else if (ratio >= 1.5) accepted = Math.random() < 0.3; // زيادة 50%
+            else if (ratio >= 1.2) accepted = Math.random() < 0.05; // زيادة 20%
+            else accepted = false; 
+
+            // في كل الحالات (قبول أو رفض) يتم تسجيل استهلاك العرض لهذه الجولة
+            await db.ref(`users/${ME}`).update({ lastOfferWeek: week });
+
+            if (accepted) {
+                // تنفيذ البيع فوراً
+                const cleanPlayer = { n: player.n, p: parseInt(player.p), pos: player.pos || "AM" };
+                const currentSquad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
+                
+                await db.ref(`users/${ME}`).update({
+                    squad: [...currentSquad, cleanPlayer],
+                    budget: APP_STATE.user.budget - price
+                });
+                alert(`✅ وافق نادي ${teamName} على بيع [${playerName}] بمبلغ ${price.toLocaleString()}$`);
+            } else {
+                alert(`❌ رفض نادي ${teamName} العرض. المبلغ غير كافٍ للتخلي عن نجم الفريق!`);
+            }
+        }, 1000);
+    },
+
+
+
+    // --- بقية الدوال الخاصة بالمحاكاة كما هي في كودك الأصلي ---
+    async simulate(hName, aName, isAuto = false, isFriendly = false) {
         if(!isAuto) UI.showSimOverlay(hName, aName);
         this.simSpeed = isAuto ? 0 : 2500; 
         let matchEvents = [];
@@ -414,7 +493,6 @@ const Engine = {
         const pH = this.calculatePower(dataH);
         const pA = this.calculatePower(dataA);
         
-        // نظام التقييمات
         let ratings = { h: {}, a: {} };
         const lineupH = Object.values(dataH.lineup || {});
         const lineupA = Object.values(dataA.lineup || {});
@@ -433,7 +511,6 @@ const Engine = {
 
             if (typeof ejectedPlayers === 'undefined') { var ejectedPlayers = { h: [], a: [] }; }
 
-            // 1. نظام الإصابات والتبديل التلقائي
             if (Math.random() < 0.003) {
                 let side = Math.random() > 0.5 ? 'h' : 'a';
                 let sideLineup = side === 'h' ? lineupH : lineupA;
@@ -455,7 +532,6 @@ const Engine = {
                 }
             }
 
-            // 2. نظام الكروت (طرد وإنذارات)
             let hRisk = (dataH.tactics?.press === 'aggr' ? 0.04 : 0.015);
             if (Math.random() < hRisk) {
                 let side = (Math.random() > 0.5 ? 'h' : 'a');
@@ -482,7 +558,6 @@ const Engine = {
                 }
             }
 
-            // 3. أهداف صاحب الأرض
             if (Math.random() < (pH.atk / (pA.def + pA.gk + 2000)) * 0.25) {
                 sh++;
                 let scorer = this.pickRealisticScorer(lineupH.filter(p => !ejectedPlayers.h.includes(p)));
@@ -493,7 +568,6 @@ const Engine = {
                 matchEvents.push({ time: m, text: `هدف: ${hName}`, player: scorer, type: 'goal', team: 'h' });
             }
 
-            // 4. أهداف الضيف
             if (Math.random() < (pA.atk / (pH.def + pH.gk + 2200)) * 0.18) {
                 sa++;
                 let scorer = this.pickRealisticScorer(lineupA.filter(p => !ejectedPlayers.a.includes(p)));
@@ -510,26 +584,19 @@ const Engine = {
             document.getElementById('end-sim-btn').style.display = "block"; 
         }
 
-        // حفظ كل شيء في الداتا
         if (!isFriendly) {
             await this.updateTable(hName, aName, sh, sa);
-                        // تحديث تلقائي لإصابات وإيقافات الفريقين بعد الماتش
             await Admin.updateTeamStatus(dataH.username);
             await Admin.updateTeamStatus(dataA.username);
-
-            // تحديث تلقائي: خصم جولة من المصابين والموقوفين للفريقين اللي لعبوا
-await Admin.updateTeamStatus(dataH.username);
-await Admin.updateTeamStatus(dataA.username);
             for (let week in APP_STATE.schedule) {
                 let matches = APP_STATE.schedule[week].matches || [];
                 let mIdx = matches.findIndex(m => m.h === hName && m.a === aName);
                 if (mIdx !== -1) {
                     await db.ref(`schedule/${week}/matches/${mIdx}`).update({
                         done: true, scoreH: sh, scoreA: sa,
-                                                            
                         events: matchEvents,
-                        ratings: ratings, // حفظ التقييمات
-                        lineups: { h: lineupH, a: lineupA } // حفظ التشكيلات لفتحها لاحقاً
+                        ratings: ratings,
+                        lineups: { h: lineupH, a: lineupA }
                     });
                     break;
                 }
@@ -537,23 +604,19 @@ await Admin.updateTeamStatus(dataA.username);
         }
     },
 
-
-    // دالة اختيار المسجل بناءً على المركز (واقعية)
-        pickRealisticScorer(lineup) {
+    pickRealisticScorer(lineup) {
         const l = Object.values(lineup || {});
         const squad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
-// تصفية اللاعبين المصابين أو الموقوفين من قائمة المسجلين المحتملين
-const available = l.filter(name => {
-    let p = squad.find(x => x.n === name);
-    return p && (p.inj || 0) <= 0 && (p.susp || 0) <= 0;
-});
-if(available.length > 0) return available[Math.floor(Math.random() * available.length)];
+        const available = l.filter(name => {
+            let p = squad.find(x => x.n === name);
+            return p && (p.inj || 0) <= 0 && (p.susp || 0) <= 0;
+        });
+        if(available.length > 0) return available[Math.floor(Math.random() * available.length)];
         const r = Math.random();
-        if (r < 0.75) return l[10] || l[9] || l[0]; // المهاجمين (آخر التشكيلة)
-        if (r < 0.90) return l[6] || l[5]; // الوسط
-        return l[2] || l[1]; // الدفاع
+        if (r < 0.75) return l[10] || l[9] || l[0]; 
+        if (r < 0.90) return l[6] || l[5]; 
+        return l[2] || l[1]; 
     },
-
 
     getCPUTeam(name) {
         const t = APP_STATE.league.find(x => x.name === name);
@@ -563,7 +626,8 @@ if(available.length > 0) return available[Math.floor(Math.random() * available.l
         sorted.slice(0, 11).forEach((p, i) => lineup[i] = p.n);
         return { team: name, squad: t.players, lineup: lineup, tactics: {style: 'normal'} };
     },
-        calculatePower(u) {
+
+    calculatePower(u) {
         let p = { atk: 0, mid: 0, def: 0, gk: 0, synergy: 1.0 };
         const lineup = u.lineup || {};
         const squad = Array.isArray(u.squad) ? u.squad : Object.values(u.squad || {});
@@ -571,34 +635,31 @@ if(available.length > 0) return available[Math.floor(Math.random() * available.l
         for (let i in lineup) {
             const pName = lineup[i];
             const pData = squad.find(x => x.n === pName);
-            
             if (pData) {
                 let val = parseInt(pData.p) || 0;
                 let pos = (pData.pos || pData.Pos || "").toUpperCase();
                 let slotIdx = parseInt(i);
                 let multiplier = 1.0;
 
-                // --- منطق توزيع القوة بناءً على المركز ---
-                if (slotIdx === 0) { // خانة الحارس
+                if (slotIdx === 0) { 
                     if (pos !== "GK") multiplier = 0.5; 
                     p.gk += (val * multiplier);
                 } 
-                else if (slotIdx >= 1 && slotIdx <= 4) { // خانات الدفاع
+                else if (slotIdx >= 1 && slotIdx <= 4) { 
                     if (!["CB", "LB", "RB", "DF"].includes(pos)) multiplier = 0.7; 
                     p.def += (val * multiplier);
                 } 
-                else if (slotIdx >= 5 && slotIdx <= 8) { // خانات الوسط
+                else if (slotIdx >= 5 && slotIdx <= 8) { 
                     if (!["CM", "LM", "RM", "CDM", "CAM", "MF"].includes(pos)) multiplier = 0.8; 
                     p.mid += (val * multiplier);
                 } 
-                else { // خانات الهجوم
+                else { 
                     if (!["ST", "RW", "LW", "CF", "FW"].includes(pos)) multiplier = 0.7;
                     p.atk += (val * multiplier);
                 }
             }
         }
 
-        // تأثير التكتيكات
         if (u.tactics?.style === 'attack') p.atk *= 1.2;
         if (u.tactics?.style === 'defend') p.def *= 1.2;
         if (u.specialists?.captain) p.synergy = 1.1; 
@@ -606,7 +667,6 @@ if(available.length > 0) return available[Math.floor(Math.random() * available.l
         return p;
     },
 
- 
     async updateTable(h, a, sh, sa) {
         const up = async (n, pts, w, d, l, gf, ga) => {
             await db.ref('league_table/'+n).transaction(s => {
@@ -618,47 +678,36 @@ if(available.length > 0) return available[Math.floor(Math.random() * available.l
         else if(sa > sh) { await up(a,3,1,0,0,sa,sh); await up(h,0,0,0,1,sh,sa); }
         else { await up(h,1,0,1,0,sh,sa); await up(a,1,0,1,0,sa,sh); }
     },
-    async sendOffer(targetTeam, playerName, price) {
-        const toUser = APP_STATE.taken[targetTeam];
-        if(!toUser) return alert("هذا الفريق ليس له مدرب!");
-        const offerId = Date.now();
-        const path = `users/${toUser}/receivedOffers/${offerId}`;
-        await db.ref(path).set({ 
-            from: APP_STATE.user.team,
-            fromUser: ME,
-            player: playerName, 
-            price: price, 
-            status: 'pending',
-            id: offerId 
-        });
-        alert("تم إرسال العرض بنجاح!");
-    },
+
     async postPress() {
         const msg = document.getElementById('press-input').value;
         if(!msg) return;
         await db.ref('News').push({ user: ME, team: APP_STATE.user.team, msg: msg, time: new Date().toLocaleTimeString() });
         document.getElementById('press-input').value = "";
+    },
+
+    async saveTactics() {
+        const tac = {
+            style: document.getElementById('tac-style').value,
+            mental: document.getElementById('tac-mental-slide').value,
+            speed: document.getElementById('tac-speed-slide').value,
+            risk: document.getElementById('tac-risk-slide').value,
+            atkPos: document.getElementById('tac-atk-pos').value,
+            midPos: document.getElementById('tac-mid-pos').value,
+            defPos: document.getElementById('tac-def-pos').value,
+            press: document.getElementById('tac-press').value
+        };
+        await db.ref(`users/${ME}/tactics`).set(tac);
+        alert("🚀 تم تسليم خطة المعركة للاعبين!");
+    },
+
+    async saveSpecialists() {
+        const spec = { captain: document.getElementById('spec-cap').value, penalties: document.getElementById('spec-pen').value, freekicks: document.getElementById('spec-free').value, corners: document.getElementById('spec-corn').value };
+        await db.ref(`users/${ME}/specialists`).set(spec);
+        alert("تم تعيين المتخصصين!");
     }
-    ,async saveTactics() {
-    const tac = {
-        style: document.getElementById('tac-style').value,
-        mental: document.getElementById('tac-mental-slide').value,
-        speed: document.getElementById('tac-speed-slide').value,
-        risk: document.getElementById('tac-risk-slide').value,
-        atkPos: document.getElementById('tac-atk-pos').value,
-        midPos: document.getElementById('tac-mid-pos').value,
-        defPos: document.getElementById('tac-def-pos').value,
-        press: document.getElementById('tac-press').value
-    };
-    await db.ref(`users/${ME}/tactics`).set(tac);
-    alert("🚀 تم تسليم خطة المعركة للاعبين!");
-},
-async saveSpecialists() {
-    const spec = { captain: document.getElementById('spec-cap').value, penalties: document.getElementById('spec-pen').value, freekicks: document.getElementById('spec-free').value, corners: document.getElementById('spec-corn').value };
-    await db.ref(`users/${ME}/specialists`).set(spec);
-    alert("تم تعيين المتخصصين!");
-}
 };
+
 
 const AutoEngine = {
     isProcessing: false, // قفل لمنع تداخل العمليات
@@ -1296,6 +1345,11 @@ const Admin = {
             }
             names.splice(1, 0, names.pop());
         }
+        const usersSnap = await db.ref('users').once('value');
+const users = usersSnap.val();
+for (let u in users) {
+    await db.ref(`users/${u}/lastOfferWeek`).remove();
+}
         await db.ref('schedule').set(sch); alert("تمت الجدولة بنجاح!");
         Admin.updateAllPlayersStatus = async function() {
     const snap = await db.ref('users').once('value');
