@@ -544,6 +544,13 @@ const Engine = {
                     let pIdx = sQ.findIndex(px => px.n === pName);
                     if (pIdx !== -1) { 
                         sQ[pIdx].inj = duration; 
+                        // لو الفريق كمبيوتر (مش موجود في مسار users)
+if (!sideData.username) {
+    db.ref(`league_data/${APP_STATE.league.findIndex(t => t.name === sideData.team)}/players/${pIdx}`).update({
+        inj: duration
+    });
+}
+
                         sQ.forEach(player => {
     // لو اللاعب مصاب "قديم" (مش اللي لسه متصاب حالا في pName)
     if (player.inj > 0 && player.n !== pName) {
@@ -642,6 +649,10 @@ const Engine = {
                 }
             }
         }
+        // أضف هذا السطر في نهاية دالة simulate وقبل إغلاقها
+await Admin.updateTeamStatus(dataH.username);
+await Admin.updateTeamStatus(dataA.username);
+
     },
 
     pickRealisticScorer(lineup) {
@@ -659,13 +670,23 @@ const Engine = {
     },
 
     getCPUTeam(name) {
-        const t = APP_STATE.league.find(x => x.name === name);
-        if(!t) return {team: name, squad: [], lineup: {}, tactics: {style:'normal'}};
-        const sorted = [...t.players].sort((a,b) => b.p - a.p);
-        let lineup = {};
-        sorted.slice(0, 11).forEach((p, i) => lineup[i] = p.n);
-        return { team: name, squad: t.players, lineup: lineup, tactics: {style: 'normal'} };
-    },
+    const t = APP_STATE.league.find(x => x.name === name);
+    if(!t) return {team: name, squad: [], lineup: {}, tactics: {style:'normal'}};
+    
+    // تعديل هنا: إضافة inj و susp لكل لاعب كمبيوتر بشكل تلقائي
+    const enhancedPlayers = t.players.map(p => ({
+        ...p,
+        inj: p.inj || 0,
+        susp: p.susp || 0
+    }));
+
+    const sorted = [...enhancedPlayers].sort((a,b) => b.p - a.p);
+    let lineup = {};
+    sorted.slice(0, 11).forEach((p, i) => lineup[i] = p.n);
+    
+    return { team: name, squad: enhancedPlayers, lineup: lineup, tactics: {style: 'normal'} };
+},
+
 
     calculatePower(u) {
         let p = { atk: 0, mid: 0, def: 0, gk: 0, synergy: 1.0 };
@@ -1437,6 +1458,28 @@ for (let u in users) {
     await db.ref(`users/${u}/lastOfferWeek`).remove();
 }
         await db.ref('schedule').set(sch); alert("تمت الجدولة بنجاح!");
+        // أضف هذه الدالة لتحديث إصابات الكمبيوتر أيضاً في نهاية كل جولة
+Admin.updateAllLeaguesStatus = async function() {
+    // 1. تحديث البشر (موجود فعلاً عندك)
+    const usersSnap = await db.ref('users').once('value');
+    const users = usersSnap.val();
+    for(let u in users) { /* كود تحديث البشر */ }
+
+    // 2. تحديث الكمبيوتر (الجزء الجديد)
+    const leagueSnap = await db.ref('league_data').once('value');
+    const leagues = leagueSnap.val() || [];
+    leagues.forEach((team, tIdx) => {
+        let changed = false;
+        team.players.forEach(p => {
+            if(p.inj > 0) { p.inj--; changed = true; }
+            if(p.susp > 0) { p.susp--; changed = true; }
+        });
+        if(changed) {
+            db.ref(`league_data/${tIdx}/players`).set(team.players);
+        }
+    });
+};
+
         Admin.updateAllPlayersStatus = async function() {
     const snap = await db.ref('users').once('value');
     const users = snap.val();
