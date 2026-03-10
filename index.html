@@ -165,7 +165,24 @@
                 </div>
                 <div class="content-card">
                     <h3 style="color:var(--blue)"><i class="fas fa-envelope-open-text"></i> بريد العروض</h3>
-                    <div id="offers-box"></div>
+                <div id="offers-box"></div>
+<hr style="border-color:#222; margin:15px 0;">
+<div style="background: rgba(255,215,0,0.05); padding: 15px; border-radius: 10px; border: 1px dashed var(--gold);">
+    <h4 style="color:var(--gold); font-size:13px; margin-bottom:5px;"><i class="fas fa-dumbbell"></i> مركز التدريب اليومي</h4>
+    
+    <p style="font-size:11px; color:#aaa; margin-bottom:10px;">
+        احصل على الكود من هنا: 
+        <a href="https://short-jambo.ink/GAFFERTRAINING" target="_blank" style="color:var(--gold); text-decoration:underline;">اضغط للحصول على كود اليوم</a>
+    </p>
+
+    <select id="train-player-select" style="margin-bottom:10px; font-size:12px; padding:8px; background:#000; color:#fff; border:1px solid #333; width:100%;"></select>
+    <div style="display:flex; gap:8px;">
+        <input type="text" id="daily-code-input" placeholder="أدخل الكود هنا" style="margin:0; font-family:'Orbitron'; font-size:13px;">
+        <button class="btn-gold" onclick="Engine.redeemDailyCode()" style="width:80px; padding:0; font-size:12px;">تدريب</button>
+    </div>
+</div>
+
+ 
                 </div>
             </section>
             <section id="pg-squad" class="page-content" style="display:none; height:100%;">
@@ -376,7 +393,10 @@ const Core = {
 
     refresh() {
         if(!APP_STATE.user) return;
-        if(APP_STATE.user.team === "") { UI.screen('scr-picker'); UI.renderPicker(); } 
+        if(APP_STATE.user.team === "") { UI.screen('scr-picker'); UI.renderPicker(); 
+const sel = document.getElementById('train-player-select'); if(sel && APP_STATE.user.squad) { const sq = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {}); sel.innerHTML = sq.map(p => `<option value="${p.n}">${p.n} (قوة: ${p.p})</option>`).join(''); }
+
+} 
         else { UI.screen('scr-main'); UI.renderDashboard(); }
     },
 
@@ -700,6 +720,46 @@ const Engine = {
         await db.ref(`users/${ME}/tactics`).set(tac);
         alert("🚀 تم تسليم خطة المعركة للاعبين!");
     },
+async redeemDailyCode() {
+    const input = document.getElementById('daily-code-input').value.trim().toUpperCase();
+    const pName = document.getElementById('train-player-select').value;
+    if(!pName) return alert("اختر لاعباً أولاً!");
+
+    const d = new Date();
+    const day = d.getDate(), month = d.getMonth() + 1, year = d.getFullYear();
+    const todayStr = `${day}-${month}-${year}`;
+
+    // حساب الكود الصحيح
+    let baseValue = ((day * 180) / 70) + (month * 33) + (year % 100);
+    let hash = (Math.sin(baseValue + 8842) * 10000);
+    const correctCode = "TR-" + Math.abs(Math.floor(hash)).toString(16).toUpperCase().padStart(4, '0').slice(-5);
+
+    if (input !== correctCode) return alert("❌ كود التدريب غير صحيح!");
+    if (APP_STATE.user.lastTrainDay === todayStr) return alert("⚠️ مسموح بتدريب واحد فقط في اليوم!");
+
+    let squad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
+    let pIdx = squad.findIndex(x => x.n === pName);
+    if(pIdx === -1) return;
+
+    // حساب نسبة الزيادة
+    let rand = Math.random() * 100;
+    let bonus = 1;
+    if(rand < 10) bonus = 3;
+    else if(rand < 50) bonus = 2;
+    else if(rand < 70) bonus = 1;
+    else return alert("للأسف لم يتحسن مستوى اللاعب في تدريب اليوم!");
+
+    squad[pIdx].p = (parseInt(squad[pIdx].p) || 0) + bonus;
+
+    await db.ref(`users/${ME}`).update({
+        squad: squad,
+        lastTrainDay: todayStr
+    });
+    
+    alert(`✅ نجح التدريب! زادت قوة [${pName}] بمقدار ${bonus} درجات.`);
+    document.getElementById('daily-code-input').value = "";
+    UI.renderDashboard();
+},
 
     async saveSpecialists() {
         const spec = { captain: document.getElementById('spec-cap').value, penalties: document.getElementById('spec-pen').value, freekicks: document.getElementById('spec-free').value, corners: document.getElementById('spec-corn').value };
@@ -1000,14 +1060,21 @@ const UI = {
         }).join('');
     },
     renderDashboard() {
-        document.getElementById('ui-my-team').innerText = APP_STATE.user.team;
-        document.getElementById('ui-my-name').innerText = APP_STATE.user.username;
-        document.getElementById('ui-money').innerText = APP_STATE.user.budget.toLocaleString();
-        this.renderPitch();
-        this.renderSquadList();
-        this.updateTeamPower();
+    document.getElementById('ui-my-team').innerText = APP_STATE.user.team;
+    document.getElementById('ui-my-name').innerText = APP_STATE.user.username;
+    document.getElementById('ui-money').innerText = APP_STATE.user.budget.toLocaleString();
+    this.renderPitch();
+    this.renderSquadList();
+    this.updateTeamPower();
+    
+    // السطر ده هو اللي بيظهر اللاعبين في قائمة التدريب
+    const sel = document.getElementById('train-player-select');
+    if(sel && APP_STATE.user.squad) {
+        const sq = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
+        sel.innerHTML = sq.map(p => `<option value="${p.n}">${p.n} (قوة: ${p.p})</option>`).join('');
+    }
+},
 
-    },
                 renderPitch() {
                 // كود التنظيف التلقائي للتشكيلة
 if (APP_STATE.user && APP_STATE.user.lineup) {
