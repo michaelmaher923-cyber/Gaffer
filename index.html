@@ -544,7 +544,21 @@ const Engine = {
                     let pIdx = sQ.findIndex(px => px.n === pName);
                     if (pIdx !== -1) { 
                         sQ[pIdx].inj = duration; 
-                        db.ref(`users/${sideData.username}/squad`).set(sQ); 
+                        sQ.forEach(player => {
+    // لو اللاعب مصاب "قديم" (مش اللي لسه متصاب حالا في pName)
+    if (player.inj > 0 && player.n !== pName) {
+        player.inj--; 
+    }
+    // لو اللاعب موقوف (كارت أحمر قديم)
+    if (player.susp > 0) {
+        player.susp--;
+    }
+});
+// --- نهاية الجزء الجديد ---
+
+// السطر اللي تحتهم المفروض يكون كدة (تأكد إنه موجود):
+ 
+                          
                     }
                     if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
                     ejectedPlayers[side].push(pName);
@@ -552,31 +566,37 @@ const Engine = {
                 }
             }
 
+                        // --- نظام الكروت (انذار / طرد) ---
             let hRisk = (dataH.tactics?.press === 'aggr' ? 0.04 : 0.015);
             if (Math.random() < hRisk) {
                 let side = (Math.random() > 0.5 ? 'h' : 'a');
                 let sideLineup = (side === 'h' ? lineupH : lineupA);
                 let activePlayers = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
                 let pName = activePlayers[Math.floor(Math.random() * activePlayers.length)];
+                
                 if(pName) {
                     let hasYellow = matchEvents.find(e => e.player === pName && e.type === 'yellow' && e.team === side);
                     let isRed = (Math.random() < 0.05 || hasYellow); 
+                    
                     if (isRed) {
                         ejectedPlayers[side].push(pName);
                         if(!isAuto) UI.addSimLog(`🟥 طرد! [${pName}]`, 'red');
+                        matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
+                        
+                        // تحديث الإيقاف في قاعدة البيانات (لو مش ودية)
                         if (!isFriendly) {
-                            let sideData = (side === 'h' ? dataH : dataH);
+                            let sideData = (side === 'h' ? dataH : dataA);
                             let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
                             let pIdx = sQ.findIndex(px => px.n === pName);
-                            if(pIdx !== -1) { sQ[pIdx].susp = 1; db.ref(`users/${sideData.username}/squad`).set(sQ); }
+                            if(pIdx !== -1) { sQ[pIdx].susp = 1;   }
                         }
-                        matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
                     } else {
                         if(!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
                         matchEvents.push({ time: m, player: pName, type: 'yellow', team: side, text: 'إنذار' });
                     }
                 }
             }
+
 
             if (Math.random() < (pH.atk / (pA.def + pA.gk + 2000)) * 0.25) {
                 sh++;
@@ -1211,8 +1231,7 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
         runFriendly(opp) { this.closeModal(); Engine.simulate(APP_STATE.user.team, opp, false, true); },
     showAdmin() {
         this.modal(`<h3>لوحة القائد مايكل</h3><button class="btn-gold" onclick="Admin.resetTable()">تصفير الجدول</button><textarea id="json-inj" style="height:150px; margin-top:10px;" placeholder="JSON"></textarea><button class="btn-gold" onclick="Admin.doInject()">حقن الفرق</button><button class="btn-gold" style="background:red; margin-top:10px;" onclick="Admin.generateDraw()">إجراء القرعة</button>
-        <button class="btn-gold" style="background:blue; margin-top:10px;" onclick="Admin.updateAllPlayersStatus()">تحديث إصابات اللاعبين</button>
-`);
+         `);
         
     },
         renderPress() {
@@ -1307,7 +1326,7 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
             <div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #222; font-size:13px;">
                 <span style="color:var(--gold); width:40px;">${e.time}'</span>
                 <span style="flex:1; text-align:right;">
-                    ${e.type === 'goal' ? '⚽' : (e.type === 'red' ? '🟥' : '🟨')} 
+                    ${e.type === 'goal' ? '⚽' : (e.type === 'red' ? '🟥' : (e.type === 'yellow' ? '🟨' : '🚑'))}
                     <b>${e.player}</b> (${e.text})
                 </span>
             </div>
