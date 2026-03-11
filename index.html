@@ -100,6 +100,7 @@
     </style>
 </head>
 <body>
+<audio id="audio-zamalek" src="https://f.top4top.io/m_3722fva600.mp3"></audio>
 
 <div id="scr-login" class="screen active-screen">
     <div class="login-card">
@@ -1331,6 +1332,17 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
 
                 async showMatchDetails(hName, aName, isDone, sH, sA) {
         if (isDone === 'false' || isDone === false || isDone === undefined) return; 
+            // --- إضافة منطق صوت جمهور الزمالك ---
+    const audioZ = document.getElementById('audio-zamalek');
+    if (audioZ) {
+        audioZ.pause();
+        audioZ.currentTime = 0;
+        if ((hName === "الزمالك" && sH > sA) || (aName === "الزمالk" && sA > sH)) {
+            audioZ.play().catch(e => console.log("التفاعل مطلوب لتشغيل الصوت"));
+        }
+    }
+    // ----------------------------------
+
 
         let matchData = null;
         // البحث عن بيانات المباراة في الجدول الزمني
