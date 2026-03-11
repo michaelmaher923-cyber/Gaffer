@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -100,7 +101,6 @@
     </style>
 </head>
 <body>
-<audio id="audio-zamalek" src="https://f.top4top.io/m_3722fva600.mp3"></audio>
 
 <div id="scr-login" class="screen active-screen">
     <div class="login-card">
@@ -479,7 +479,7 @@ const Engine = {
             else accepted = false; 
 
             // في كل الحالات (قبول أو رفض) يتم تسجيل استهلاك العرض لهذه الجولة
-             
+            await db.ref(`users/${ME}`).update({ lastOfferWeek: week });
 
             if (accepted) {
                 // تنفيذ البيع فوراً
@@ -524,7 +524,7 @@ const Engine = {
 
         let sh = 0, sa = 0;
 
-        for (let m = 1; m <= 90; m++) {
+                     for (let m = 1; m <= 90; m++) {
             if(!isAuto) {
                 await new Promise(r => setTimeout(r, this.simSpeed)); 
                 document.getElementById('sim-timer').innerText = m + ":00";
@@ -545,28 +545,7 @@ const Engine = {
                     let pIdx = sQ.findIndex(px => px.n === pName);
                     if (pIdx !== -1) { 
                         sQ[pIdx].inj = duration; 
-                        // لو الفريق كمبيوتر (مش موجود في مسار users)
-if (!sideData.username) {
-    db.ref(`league_data/${APP_STATE.league.findIndex(t => t.name === sideData.team)}/players/${pIdx}`).update({
-        inj: duration
-    });
-}
-
-                        sQ.forEach(player => {
-    // لو اللاعب مصاب "قديم" (مش اللي لسه متصاب حالا في pName)
-    if (player.inj > 0 && player.n !== pName) {
-        player.inj--; 
-    }
-    // لو اللاعب موقوف (كارت أحمر قديم)
-    if (player.susp > 0) {
-        player.susp--;
-    }
-});
-// --- نهاية الجزء الجديد ---
-
-// السطر اللي تحتهم المفروض يكون كدة (تأكد إنه موجود):
- 
-                          
+                        db.ref(`users/${sideData.username}/squad`).set(sQ); 
                     }
                     if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
                     ejectedPlayers[side].push(pName);
@@ -574,37 +553,31 @@ if (!sideData.username) {
                 }
             }
 
-                        // --- نظام الكروت (انذار / طرد) ---
             let hRisk = (dataH.tactics?.press === 'aggr' ? 0.04 : 0.015);
             if (Math.random() < hRisk) {
                 let side = (Math.random() > 0.5 ? 'h' : 'a');
                 let sideLineup = (side === 'h' ? lineupH : lineupA);
                 let activePlayers = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
                 let pName = activePlayers[Math.floor(Math.random() * activePlayers.length)];
-                
                 if(pName) {
                     let hasYellow = matchEvents.find(e => e.player === pName && e.type === 'yellow' && e.team === side);
                     let isRed = (Math.random() < 0.05 || hasYellow); 
-                    
                     if (isRed) {
                         ejectedPlayers[side].push(pName);
                         if(!isAuto) UI.addSimLog(`🟥 طرد! [${pName}]`, 'red');
-                        matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
-                        
-                        // تحديث الإيقاف في قاعدة البيانات (لو مش ودية)
                         if (!isFriendly) {
-                            let sideData = (side === 'h' ? dataH : dataA);
+                            let sideData = (side === 'h' ? dataH : dataH);
                             let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
                             let pIdx = sQ.findIndex(px => px.n === pName);
-                            if(pIdx !== -1) { sQ[pIdx].susp = 1;   }
+                            if(pIdx !== -1) { sQ[pIdx].susp = 1; db.ref(`users/${sideData.username}/squad`).set(sQ); }
                         }
+                        matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
                     } else {
                         if(!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
                         matchEvents.push({ time: m, player: pName, type: 'yellow', team: side, text: 'إنذار' });
                     }
                 }
             }
-
 
             if (Math.random() < (pH.atk / (pA.def + pA.gk + 2000)) * 0.25) {
                 sh++;
@@ -613,47 +586,7 @@ if (!sideData.username) {
                     UI.addSimLog(`⚽ هدف! ${hName} - [${scorer}] (${m}')`, 'var(--gold)'); 
                     document.getElementById('sim-score-h').innerText = sh; 
                 }
-                // البحث عن صانع هدف (لاعب عشوائي غير الهداف من التشكيلة الحالية)
-if (Math.random() < (pA.atk / (pH.def + pH.gk + 2200)) * 0.18) {
-    sa++;
-    let scorerA = this.pickRealisticScorer(lineupA.filter(p => !ejectedPlayers.a.includes(p)));
-    if(!isAuto) { 
-        UI.addSimLog(`⚽ هدف! ${aName} - [${scorerA}] (${m}')`, 'var(--blue)'); 
-        document.getElementById('sim-score-a').innerText = sa; 
-    }
-    let assistPlayersA = lineupA.filter(p => p !== scorerA && !ejectedPlayers.a.includes(p));
-    let assisterA = assistPlayersA.length > 0 ? assistPlayersA[Math.floor(Math.random() * assistPlayersA.length)] : null;
-
-    matchEvents.push({ time: m, player: scorerA, type: 'goal', team: 'a', text: 'هدف' });
-    if(assisterA) {
-        matchEvents.push({ time: m, player: assisterA, type: 'assist', team: 'a', text: 'تمريرة حاسمة' });
-    }
-}
-
-
-matchEvents.push({ 
-    time: m, player: scorer, type: 'goal', team: 'h', text: 'هدف' 
-});
-
-if(assisterH) {
-    matchEvents.push({ 
-        time: m, player: assisterH, type: 'assist', team: 'h', text: 'تمريرة حاسمة' 
-    });
-}
-// البحث عن صانع هدف للضيف
-let assistPlayersA = lineupA.filter(p => p !== scorer && !ejectedPlayers.a.includes(p));
-let assisterA = assistPlayersA.length > 0 ? assistPlayersA[Math.floor(Math.random() * assistPlayersA.length)] : null;
-
-matchEvents.push({ 
-    time: m, player: scorer, type: 'goal', team: 'a', text: 'هدف' 
-});
-
-if(assisterA) {
-    matchEvents.push({ 
-        time: m, player: assisterA, type: 'assist', team: 'a', text: 'تمريرة حاسمة' 
-    });
-}
-
+                matchEvents.push({ time: m, text: `هدف: ${hName}`, player: scorer, type: 'goal', team: 'h' });
             }
 
             if (Math.random() < (pA.atk / (pH.def + pH.gk + 2200)) * 0.18) {
@@ -663,21 +596,7 @@ if(assisterA) {
                     UI.addSimLog(`⚽ هدف! ${aName} - [${scorer}] (${m}')`, 'var(--blue)'); 
                     document.getElementById('sim-score-a').innerText = sa; 
                 }
-                // البحث عن صانع هدف للضيف
-let assistPlayersA = lineupA.filter(p => p !== scorer && !ejectedPlayers.a.includes(p));
-let assisterA = assistPlayersA.length > 0 ? assistPlayersA[Math.floor(Math.random() * assistPlayersA.length)] : null;
-
-// تسجيل الهدف
-matchEvents.push({ 
-    time: m, player: scorer, type: 'goal', team: 'a', text: 'هدف' 
-});
-
-// تسجيل الصناعة (لو موجودة) عشان التقييم يتحسب
-if(assisterA) {
-    matchEvents.push({ 
-        time: m, player: assisterA, type: 'assist', team: 'a', text: 'تمريرة حاسمة' 
-    });
-}
+                matchEvents.push({ time: m, text: `هدف: ${aName}`, player: scorer, type: 'goal', team: 'a' });
             }
         }
 
@@ -704,10 +623,6 @@ if(assisterA) {
                 }
             }
         }
-        // أضف هذا السطر في نهاية دالة simulate وقبل إغلاقها
-await Admin.updateTeamStatus(dataH.username);
-await Admin.updateTeamStatus(dataA.username);
-
     },
 
     pickRealisticScorer(lineup) {
@@ -725,49 +640,13 @@ await Admin.updateTeamStatus(dataA.username);
     },
 
     getCPUTeam(name) {
-    const t = APP_STATE.league.find(x => x.name === name);
-    if(!t) return {team: name, squad: [], lineup: {}, tactics: {style:'normal'}};
-    
-    const squad = t.players.map(p => ({
-        ...p,
-        inj: p.inj || 0,
-        susp: p.susp || 0
-    }));
-
-    let lineup = {};
-    let usedNames = new Set();
-
-    // دالة مساعدة لاختيار أفضل لاعب متاح في مركز معين
-    const pickBestFor = (positions, slotIdx) => {
-        const best = squad
-            .filter(p => positions.includes((p.pos || "").toUpperCase()) && !usedNames.has(p.n) && p.inj <= 0 && p.susp <= 0)
-            .sort((a, b) => b.p - a.p)[0];
-        
-        if (best) {
-            lineup[slotIdx] = best.n;
-            usedNames.add(best.n);
-        } else {
-            // إذا لم يجد لاعب في المركز المطلوب، يأخذ أفضل لاعب متاح من أي مركز (Fallback)
-            const fallback = squad
-                .filter(p => !usedNames.has(p.n) && p.inj <= 0 && p.susp <= 0)
-                .sort((a, b) => b.p - a.p)[0];
-            if (fallback) {
-                lineup[slotIdx] = fallback.n;
-                usedNames.add(fallback.n);
-            }
-        }
-    };
-
-    // تعيين اللاعبين حسب مراكزهم في التشكيلة (المنطق الافتراضي 4-3-3 أو غيره)
-    pickBestFor(["GK"], 0); // الحارس
-    for (let i = 1; i <= 4; i++) pickBestFor(["CB", "LB", "RB", "DF"], i); // الدفاع
-    for (let i = 5; i <= 8; i++) pickBestFor(["CM", "LM", "RM", "CDM", "CAM", "MF"], i); // الوسط
-    for (let i = 9; i <= 10; i++) pickBestFor(["ST", "RW", "LW", "CF", "FW"], i); // الهجوم
-
-    return { team: name, squad: squad, lineup: lineup, tactics: {style: 'normal'} };
-},
-
-
+        const t = APP_STATE.league.find(x => x.name === name);
+        if(!t) return {team: name, squad: [], lineup: {}, tactics: {style:'normal'}};
+        const sorted = [...t.players].sort((a,b) => b.p - a.p);
+        let lineup = {};
+        sorted.slice(0, 11).forEach((p, i) => lineup[i] = p.n);
+        return { team: name, squad: t.players, lineup: lineup, tactics: {style: 'normal'} };
+    },
 
     calculatePower(u) {
         let p = { atk: 0, mid: 0, def: 0, gk: 0, synergy: 1.0 };
@@ -1333,7 +1212,8 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
         runFriendly(opp) { this.closeModal(); Engine.simulate(APP_STATE.user.team, opp, false, true); },
     showAdmin() {
         this.modal(`<h3>لوحة القائد مايكل</h3><button class="btn-gold" onclick="Admin.resetTable()">تصفير الجدول</button><textarea id="json-inj" style="height:150px; margin-top:10px;" placeholder="JSON"></textarea><button class="btn-gold" onclick="Admin.doInject()">حقن الفرق</button><button class="btn-gold" style="background:red; margin-top:10px;" onclick="Admin.generateDraw()">إجراء القرعة</button>
-         `);
+        <button class="btn-gold" style="background:blue; margin-top:10px;" onclick="Admin.updateAllPlayersStatus()">تحديث إصابات اللاعبين</button>
+`);
         
     },
         renderPress() {
@@ -1412,17 +1292,6 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
 
                 async showMatchDetails(hName, aName, isDone, sH, sA) {
         if (isDone === 'false' || isDone === false || isDone === undefined) return; 
-            // --- إضافة منطق صوت جمهور الزمالك ---
-    const audioZ = document.getElementById('audio-zamalek');
-    if (audioZ) {
-        audioZ.pause();
-        audioZ.currentTime = 0;
-        if ((hName === "الزمالك" && sH > sA) || (aName === "الزمالk" && sA > sH)) {
-            audioZ.play().catch(e => console.log("التفاعل مطلوب لتشغيل الصوت"));
-        }
-    }
-    // ----------------------------------
-
 
         let matchData = null;
         // البحث عن بيانات المباراة في الجدول الزمني
@@ -1438,10 +1307,10 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
         let eventsHtml = (matchData.events || []).map(e => `
             <div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #222; font-size:13px;">
                 <span style="color:var(--gold); width:40px;">${e.time}'</span>
-                <span style="flex:1; text-align:right;">
-                    ${e.type === 'goal' ? '⚽' : (e.type === 'red' ? '🟥' : (e.type === 'yellow' ? '🟨' : '🚑'))}
-                    <b>${e.player}</b> (${e.text})
-                </span>
+           <span style="flex:1; text-align:right;">
+    ${e.type === 'goal' ? '⚽' : (e.type === 'red' ? '🟥' : '🟨')} 
+    <b>${e.player}</b> ${e.assist ? `<small>(صناعة: ${e.assist})</small>` : ''} (${e.text})
+</span>
             </div>
         `).join('') || "<p style='text-align:center; color:#555;'>لا توجد أحداث هامة</p>";
 
@@ -1455,31 +1324,17 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
             
             ratingsHtml += `<div style="background:#050505; padding:10px; border-radius:10px; border:1px solid #222;">
                 <h6 style="color:var(--gold); border-bottom:1px solid #333; margin-bottom:8px; padding-bottom:4px; font-size:12px;">${side.name}</h6>`;
-            // السطر ده بيعرف الجهاز مين أعلى تقييم في الفريقين مع بعض
-const topInMatch = Math.max(...Object.values(matchData.ratings.h), ...Object.values(matchData.ratings.a));
-
-                                    if (playersRatings) {
-                // التعديل: ترتيب التقييمات حسب مراكز التشكيلة (الحارس أولاً)
-                const currentLineup = matchData.lineups ? Object.values(matchData.lineups[side.key]) : Object.keys(playersRatings);
-                
-                currentLineup.forEach(playerName => {
-                    if (!playerName || !playersRatings[playerName]) return;
-
-                    let score = calculatePlayerRating(playerName, matchData.events || [], side.key, sH, sA);
-                    let scoreColor = score >= 7.5 ? '#00ff00' : (score >= 6.5 ? '#fff' : '#ff4444');
-                    // النجمة هتظهر فقط لو تقييم اللاعب بيساوي أعلى تقييم في الملعب كله
-let star = (score === topInMatch && score > 7.0) ? '⭐' : '';
-
-
+            
+            if (playersRatings) {
+                for (let playerName in playersRatings) {
+                    let score = playersRatings[playerName];
                     ratingsHtml += `
                         <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px; border-bottom:1px solid #111; padding:2px 0;">
-                            <span style="color:#bbb;">${star} ${playerName}</span>
-                            <b style="color:${scoreColor}">${score.toFixed(1)}</b>
+                            <span style="color:#bbb;">${playerName}</span>
+                            <b style="color:${score >= 7.5 ? '#00ff00' : (score >= 6.5 ? '#fff' : '#ff4444')}">${score.toFixed(1)}</b>
                         </div>`;
-                });
-            }
- else {
-
+                }
+            } else {
                 ratingsHtml += `<p style="font-size:10px; color:#444;">لا توجد تقييمات</p>`;
             }
             ratingsHtml += `</div>`;
@@ -1564,28 +1419,6 @@ for (let u in users) {
     await db.ref(`users/${u}/lastOfferWeek`).remove();
 }
         await db.ref('schedule').set(sch); alert("تمت الجدولة بنجاح!");
-        // أضف هذه الدالة لتحديث إصابات الكمبيوتر أيضاً في نهاية كل جولة
-Admin.updateAllLeaguesStatus = async function() {
-    // 1. تحديث البشر (موجود فعلاً عندك)
-    const usersSnap = await db.ref('users').once('value');
-    const users = usersSnap.val();
-    for(let u in users) { /* كود تحديث البشر */ }
-
-    // 2. تحديث الكمبيوتر (الجزء الجديد)
-    const leagueSnap = await db.ref('league_data').once('value');
-    const leagues = leagueSnap.val() || [];
-    leagues.forEach((team, tIdx) => {
-        let changed = false;
-        team.players.forEach(p => {
-            if(p.inj > 0) { p.inj--; changed = true; }
-            if(p.susp > 0) { p.susp--; changed = true; }
-        });
-        if(changed) {
-            db.ref(`league_data/${tIdx}/players`).set(team.players);
-        }
-    });
-};
-
         Admin.updateAllPlayersStatus = async function() {
     const snap = await db.ref('users').once('value');
     const users = snap.val();
@@ -1598,25 +1431,10 @@ Admin.updateAllLeaguesStatus = async function() {
 };
     }
 };
-function calculatePlayerRating(playerName, events, teamSide, scoreH, scoreA) {
-    let rating = 6.5; 
-    let goalsAgainst = (teamSide === 'h') ? scoreA : scoreH;
-
-    events.forEach(event => {
-        if (event.player === playerName) {
-            if (event.type === 'goal') rating += 2.5;
-            if (event.type === 'assist') rating += 1.2;
-            if (event.type === 'yellow') rating -= 0.6;
-            if (event.type === 'red') rating -= 2.5; 
-        }
-    });
-
-    if (goalsAgainst === 0) rating += 0.5; // بونص نظافة الشباك
-    return Math.min(10, Math.max(3, rating)); 
-}
 
 setInterval(() => { const c = document.getElementById('digital-clock'); if(c) c.innerText = new Date().toLocaleTimeString(); }, 1000);
 setInterval(() => { AutoEngine.checkAndRun(); }, 60000);
 </script>
 </body>
 </html>
+
