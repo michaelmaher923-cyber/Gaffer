@@ -101,6 +101,7 @@
     </style>
 </head>
 <body>
+<audio id="audio-zamalek" src="https://f.top4top.io/m_3722fva600.mp3"></audio>
 
 <div id="scr-login" class="screen active-screen">
     <div class="login-card">
@@ -524,7 +525,7 @@ const Engine = {
 
         let sh = 0, sa = 0;
 
-                     for (let m = 1; m <= 90; m++) {
+        for (let m = 1; m <= 90; m++) {
             if(!isAuto) {
                 await new Promise(r => setTimeout(r, this.simSpeed)); 
                 document.getElementById('sim-timer').innerText = m + ":00";
@@ -545,7 +546,28 @@ const Engine = {
                     let pIdx = sQ.findIndex(px => px.n === pName);
                     if (pIdx !== -1) { 
                         sQ[pIdx].inj = duration; 
-                        db.ref(`users/${sideData.username}/squad`).set(sQ); 
+                        // لو الفريق كمبيوتر (مش موجود في مسار users)
+if (!sideData.username) {
+    db.ref(`league_data/${APP_STATE.league.findIndex(t => t.name === sideData.team)}/players/${pIdx}`).update({
+        inj: duration
+    });
+}
+
+                        sQ.forEach(player => {
+    // لو اللاعب مصاب "قديم" (مش اللي لسه متصاب حالا في pName)
+    if (player.inj > 0 && player.n !== pName) {
+        player.inj--; 
+    }
+    // لو اللاعب موقوف (كارت أحمر قديم)
+    if (player.susp > 0) {
+        player.susp--;
+    }
+});
+// --- نهاية الجزء الجديد ---
+
+// السطر اللي تحتهم المفروض يكون كدة (تأكد إنه موجود):
+ 
+                          
                     }
                     if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
                     ejectedPlayers[side].push(pName);
@@ -553,31 +575,37 @@ const Engine = {
                 }
             }
 
+                        // --- نظام الكروت (انذار / طرد) ---
             let hRisk = (dataH.tactics?.press === 'aggr' ? 0.04 : 0.015);
             if (Math.random() < hRisk) {
                 let side = (Math.random() > 0.5 ? 'h' : 'a');
                 let sideLineup = (side === 'h' ? lineupH : lineupA);
                 let activePlayers = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
                 let pName = activePlayers[Math.floor(Math.random() * activePlayers.length)];
+                
                 if(pName) {
                     let hasYellow = matchEvents.find(e => e.player === pName && e.type === 'yellow' && e.team === side);
                     let isRed = (Math.random() < 0.05 || hasYellow); 
+                    
                     if (isRed) {
                         ejectedPlayers[side].push(pName);
                         if(!isAuto) UI.addSimLog(`🟥 طرد! [${pName}]`, 'red');
+                        matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
+                        
+                        // تحديث الإيقاف في قاعدة البيانات (لو مش ودية)
                         if (!isFriendly) {
-                            let sideData = (side === 'h' ? dataH : dataH);
+                            let sideData = (side === 'h' ? dataH : dataA);
                             let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
                             let pIdx = sQ.findIndex(px => px.n === pName);
-                            if(pIdx !== -1) { sQ[pIdx].susp = 1; db.ref(`users/${sideData.username}/squad`).set(sQ); }
+                            if(pIdx !== -1) { sQ[pIdx].susp = 1;   }
                         }
-                        matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
                     } else {
                         if(!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
                         matchEvents.push({ time: m, player: pName, type: 'yellow', team: side, text: 'إنذار' });
                     }
                 }
             }
+
 
             if (Math.random() < (pH.atk / (pA.def + pA.gk + 2000)) * 0.25) {
                 sh++;
@@ -623,6 +651,10 @@ const Engine = {
                 }
             }
         }
+        // أضف هذا السطر في نهاية دالة simulate وقبل إغلاقها
+await Admin.updateTeamStatus(dataH.username);
+await Admin.updateTeamStatus(dataA.username);
+
     },
 
     pickRealisticScorer(lineup) {
@@ -640,13 +672,23 @@ const Engine = {
     },
 
     getCPUTeam(name) {
-        const t = APP_STATE.league.find(x => x.name === name);
-        if(!t) return {team: name, squad: [], lineup: {}, tactics: {style:'normal'}};
-        const sorted = [...t.players].sort((a,b) => b.p - a.p);
-        let lineup = {};
-        sorted.slice(0, 11).forEach((p, i) => lineup[i] = p.n);
-        return { team: name, squad: t.players, lineup: lineup, tactics: {style: 'normal'} };
-    },
+    const t = APP_STATE.league.find(x => x.name === name);
+    if(!t) return {team: name, squad: [], lineup: {}, tactics: {style:'normal'}};
+    
+    // تعديل هنا: إضافة inj و susp لكل لاعب كمبيوتر بشكل تلقائي
+    const enhancedPlayers = t.players.map(p => ({
+        ...p,
+        inj: p.inj || 0,
+        susp: p.susp || 0
+    }));
+
+    const sorted = [...enhancedPlayers].sort((a,b) => b.p - a.p);
+    let lineup = {};
+    sorted.slice(0, 11).forEach((p, i) => lineup[i] = p.n);
+    
+    return { team: name, squad: enhancedPlayers, lineup: lineup, tactics: {style: 'normal'} };
+},
+
 
     calculatePower(u) {
         let p = { atk: 0, mid: 0, def: 0, gk: 0, synergy: 1.0 };
@@ -1212,8 +1254,7 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
         runFriendly(opp) { this.closeModal(); Engine.simulate(APP_STATE.user.team, opp, false, true); },
     showAdmin() {
         this.modal(`<h3>لوحة القائد مايكل</h3><button class="btn-gold" onclick="Admin.resetTable()">تصفير الجدول</button><textarea id="json-inj" style="height:150px; margin-top:10px;" placeholder="JSON"></textarea><button class="btn-gold" onclick="Admin.doInject()">حقن الفرق</button><button class="btn-gold" style="background:red; margin-top:10px;" onclick="Admin.generateDraw()">إجراء القرعة</button>
-        <button class="btn-gold" style="background:blue; margin-top:10px;" onclick="Admin.updateAllPlayersStatus()">تحديث إصابات اللاعبين</button>
-`);
+         `);
         
     },
         renderPress() {
@@ -1292,6 +1333,17 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
 
                 async showMatchDetails(hName, aName, isDone, sH, sA) {
         if (isDone === 'false' || isDone === false || isDone === undefined) return; 
+            // --- إضافة منطق صوت جمهور الزمالك ---
+    const audioZ = document.getElementById('audio-zamalek');
+    if (audioZ) {
+        audioZ.pause();
+        audioZ.currentTime = 0;
+        if ((hName === "الزمالك" && sH > sA) || (aName === "الزمالk" && sA > sH)) {
+            audioZ.play().catch(e => console.log("التفاعل مطلوب لتشغيل الصوت"));
+        }
+    }
+    // ----------------------------------
+
 
         let matchData = null;
         // البحث عن بيانات المباراة في الجدول الزمني
@@ -1307,10 +1359,10 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
         let eventsHtml = (matchData.events || []).map(e => `
             <div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #222; font-size:13px;">
                 <span style="color:var(--gold); width:40px;">${e.time}'</span>
-           <span style="flex:1; text-align:right;">
-    ${e.type === 'goal' ? '⚽' : (e.type === 'red' ? '🟥' : '🟨')} 
-    <b>${e.player}</b> ${e.assist ? `<small>(صناعة: ${e.assist})</small>` : ''} (${e.text})
-</span>
+                <span style="flex:1; text-align:right;">
+                    ${e.type === 'goal' ? '⚽' : (e.type === 'red' ? '🟥' : (e.type === 'yellow' ? '🟨' : '🚑'))}
+                    <b>${e.player}</b> (${e.text})
+                </span>
             </div>
         `).join('') || "<p style='text-align:center; color:#555;'>لا توجد أحداث هامة</p>";
 
@@ -1419,6 +1471,28 @@ for (let u in users) {
     await db.ref(`users/${u}/lastOfferWeek`).remove();
 }
         await db.ref('schedule').set(sch); alert("تمت الجدولة بنجاح!");
+        // أضف هذه الدالة لتحديث إصابات الكمبيوتر أيضاً في نهاية كل جولة
+Admin.updateAllLeaguesStatus = async function() {
+    // 1. تحديث البشر (موجود فعلاً عندك)
+    const usersSnap = await db.ref('users').once('value');
+    const users = usersSnap.val();
+    for(let u in users) { /* كود تحديث البشر */ }
+
+    // 2. تحديث الكمبيوتر (الجزء الجديد)
+    const leagueSnap = await db.ref('league_data').once('value');
+    const leagues = leagueSnap.val() || [];
+    leagues.forEach((team, tIdx) => {
+        let changed = false;
+        team.players.forEach(p => {
+            if(p.inj > 0) { p.inj--; changed = true; }
+            if(p.susp > 0) { p.susp--; changed = true; }
+        });
+        if(changed) {
+            db.ref(`league_data/${tIdx}/players`).set(team.players);
+        }
+    });
+};
+
         Admin.updateAllPlayersStatus = async function() {
     const snap = await db.ref('users').once('value');
     const users = snap.val();
