@@ -1331,22 +1331,19 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
             if(document.getElementById('val-risk')) document.getElementById('val-risk').innerText = getLbl(r, ["معدومة", "قليلة", "عادية", "كثيرة", "كثيرة جداً"]);
         },
 
-                async showMatchDetails(hName, aName, isDone, sH, sA) {
+                    async showMatchDetails(hName, aName, isDone, sH, sA) {
         if (isDone === 'false' || isDone === false || isDone === undefined) return; 
-            // --- إضافة منطق صوت جمهور الزمالك ---
-    const audioZ = document.getElementById('audio-zamalek');
-    if (audioZ) {
-        audioZ.pause();
-        audioZ.currentTime = 0;
-        if ((hName === "الزمالك" && sH > sA) || (aName === "الزمالk" && sA > sH)) {
-            audioZ.play().catch(e => console.log("التفاعل مطلوب لتشغيل الصوت"));
-        }
-    }
-    // ----------------------------------
 
+        const audioZ = document.getElementById('audio-zamalek');
+        if (audioZ) {
+            audioZ.pause();
+            audioZ.currentTime = 0;
+            if ((hName === "الزمالك" && sH > sA) || (aName === "الزمالك" && sA > sH)) {
+                audioZ.play().catch(e => console.log("التفاعل مطلوب"));
+            }
+        }
 
         let matchData = null;
-        // البحث عن بيانات المباراة في الجدول الزمني
         for (let w in APP_STATE.schedule) {
             let matches = APP_STATE.schedule[w].matches || [];
             matchData = matches.find(m => m.h === hName && m.a === aName && m.done);
@@ -1355,28 +1352,33 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
 
         if (!matchData) return alert("بيانات المباراة غير متوفرة حالياً");
 
-        // 1. بناء سجل الأحداث (أهداف وكروت)
-        let eventsHtml = (matchData.events || []).map(e => `
-            <div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #222; font-size:13px;">
-                <span style="color:var(--gold); width:40px;">${e.time}'</span>
-                <span style="flex:1; text-align:right;">
-                    ${e.type === 'goal' ? '⚽' : (e.type === 'red' ? '🟥' : (e.type === 'yellow' ? '🟨' : '🚑'))}
-                    <b>${e.player}</b> (${e.text})
-                </span>
-            </div>
-        `).join('') || "<p style='text-align:center; color:#555;'>لا توجد أحداث هامة</p>";
+        // مصفوفة تعريف الأيقونات لضمان عدم التداخل
+        const eventIcons = {
+            'goal': { icon: '⚽', color: 'var(--gold)' },
+            'yellow': { icon: '🟨', color: '#ffeb3b' },
+            'red': { icon: '🟥', color: '#ff3366' },
+            'injury': { icon: '🚑', color: '#ffa500' }
+        };
 
-        // 2. بناء عرض تقييمات اللاعبين
+        let eventsHtml = (matchData.events || []).map(e => {
+            const config = eventIcons[e.type] || { icon: '•', color: '#fff' };
+            return `
+                <div style="display:flex; align-items:center; gap:10px; padding:10px; border-bottom:1px solid #222; font-size:13px; background: rgba(255,255,255,0.02);">
+                    <span style="color:var(--gold); font-family:'Orbitron'; width:35px; flex-shrink:0;">${e.time}'</span>
+                    <span style="font-size:18px; width:25px; text-align:center; flex-shrink:0;">${config.icon}</span>
+                    <span style="flex:1; text-align:right; font-weight:bold;">
+                        ${e.player} <small style="color:${config.color}; font-weight:normal;">(${e.text})</small>
+                    </span>
+                </div>
+            `;
+        }).join('') || "<p style='text-align:center; color:#555; padding:20px;'>مباراة تكتيكية بدون أحداث كبرى</p>";
+
         let ratingsHtml = `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:15px;">`;
-        
         const sides = [{key: 'h', name: hName}, {key: 'a', name: aName}];
-        
         sides.forEach(side => {
             let playersRatings = matchData.ratings ? matchData.ratings[side.key] : null;
-            
             ratingsHtml += `<div style="background:#050505; padding:10px; border-radius:10px; border:1px solid #222;">
                 <h6 style="color:var(--gold); border-bottom:1px solid #333; margin-bottom:8px; padding-bottom:4px; font-size:12px;">${side.name}</h6>`;
-            
             if (playersRatings) {
                 for (let playerName in playersRatings) {
                     let score = playersRatings[playerName];
@@ -1386,44 +1388,29 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
                             <b style="color:${score >= 7.5 ? '#00ff00' : (score >= 6.5 ? '#fff' : '#ff4444')}">${score.toFixed(1)}</b>
                         </div>`;
                 }
-            } else {
-                ratingsHtml += `<p style="font-size:10px; color:#444;">لا توجد تقييمات</p>`;
-            }
+            } else { ratingsHtml += `<p style="font-size:10px; color:#444;">لا توجد تقييمات</p>`; }
             ratingsHtml += `</div>`;
         });
         ratingsHtml += `</div>`;
 
-        // 3. عرض المودال النهائي
         this.modal(`
             <div style="text-align:center;">
-                <h3 style="color:var(--gold); font-family:'Orbitron'; margin-bottom:15px;">تفاصيل الملحمة</h3>
-                
-                <div style="display:flex; justify-content:space-around; align-items:center; margin-bottom:20px; background:linear-gradient(180deg, #111, #000); padding:20px; border-radius:15px; border:1px solid var(--gold); box-shadow: 0 0 15px rgba(255,215,0,0.1);">
-                    <div style="flex:1;">
-                        <h4 style="font-size:14px;">${hName}</h4>
-                        <h1 style="font-size:45px; color:#fff;">${sH}</h1>
-                    </div>
-                    <div style="font-family:'Orbitron'; color:var(--gold); font-size:20px; opacity:0.5;">VS</div>
-                    <div style="flex:1;">
-                        <h4 style="font-size:14px;">${aName}</h4>
-                        <h1 style="font-size:45px; color:#fff;">${sA}</h1>
-                    </div>
+                <h3 style="color:var(--gold); font-family:'Orbitron'; margin-bottom:15px;">تقرير المباراة</h3>
+                <div style="display:flex; justify-content:space-around; align-items:center; margin-bottom:20px; background:#000; padding:20px; border-radius:15px; border:1px solid #222;">
+                    <div style="flex:1;"><h4 style="font-size:14px;">${hName}</h4><h1 style="font-size:40px; color:#fff;">${sH}</h1></div>
+                    <div style="font-family:'Orbitron'; color:var(--gold); font-size:18px; opacity:0.3;">VS</div>
+                    <div style="flex:1;"><h4 style="font-size:14px;">${aName}</h4><h1 style="font-size:40px; color:#fff;">${sA}</h1></div>
                 </div>
-
-                <div style="text-align:right; max-height:350px; overflow-y:auto; padding-left:10px;">
-                    <h5 style="color:var(--blue); border-right:3px solid var(--blue); padding-right:10px; margin-bottom:10px; font-size:14px;">مجريات اللقاء</h5>
+                <div style="text-align:right; max-height:400px; overflow-y:auto;">
+                    <h5 style="color:var(--blue); border-right:3px solid var(--blue); padding-right:10px; margin-bottom:10px;">الأحداث والوقائع</h5>
                     ${eventsHtml}
-                    
-                    <h5 style="color:var(--gold); border-right:3px solid var(--gold); padding-right:10px; margin-top:25px; margin-bottom:10px; font-size:14px;">تقييمات الأداء</h5>
+                    <h5 style="color:var(--gold); border-right:3px solid var(--gold); padding-right:10px; margin-top:20px; margin-bottom:10px;">تقييمات اللاعبين</h5>
                     ${ratingsHtml}
                 </div>
             </div>
         `);
     }
 
-
-
-    
 };
 
 const Admin = {
