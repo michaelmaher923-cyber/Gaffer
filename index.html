@@ -656,28 +656,32 @@ const Engine = {
                 }
             }
         }
-        let finalRatingsHTML = `
-    <div style="display:flex; justify-content:space-around; text-align:right; direction:rtl;">
-        <div>
-            <h4>تقييمات ${hName}</h4>
-            ${lineupH.map(name => {
+        // --- عرض التقييمات بترتيب المراكز (0 للحارس، 10 للمهاجم) ---
+let finalRatingsHTML = `
+    <div style="display:flex; justify-content:space-around; text-align:right; direction:rtl; gap:10px;">
+        <div style="flex:1;">
+            <h4 style="color:var(--gold); border-bottom:1px solid #333; margin-bottom:10px;">تقييمات ${hName}</h4>
+            ${[0,1,2,3,4,5,6,7,8,9,10].map(i => {
+                let name = dataH.lineup[i]; // جلب الاسم من الخانة المحددة في التشكيلة
                 if(!name) return '';
                 let rate = ratings.h[name] || 6.0;
                 let color = rate >= 7.5 ? '#4CAF50' : (rate <= 5.5 ? '#f44336' : '#fff');
-                return `<p>${name}: <b style="color:${color}">${rate.toFixed(1)}</b></p>`;
+                return `<p style="margin-bottom:4px; font-size:12px;">${name}: <b style="color:${color}">${rate.toFixed(1)}</b></p>`;
             }).join('')}
         </div>
-        <div>
-            <h4>تقييمات ${aName}</h4>
-            ${lineupA.map(name => {
+        <div style="flex:1;">
+            <h4 style="color:var(--blue); border-bottom:1px solid #333; margin-bottom:10px;">تقييمات ${aName}</h4>
+            ${[0,1,2,3,4,5,6,7,8,9,10].map(i => {
+                let name = dataA.lineup[i];
                 if(!name) return '';
                 let rate = ratings.a[name] || 6.0;
                 let color = rate >= 7.5 ? '#4CAF50' : (rate <= 5.5 ? '#f44336' : '#fff');
-                return `<p>${name}: <b style="color:${color}">${rate.toFixed(1)}</b></p>`;
+                return `<p style="margin-bottom:4px; font-size:12px;">${name}: <b style="color:${color}">${rate.toFixed(1)}</b></p>`;
             }).join('')}
         </div>
     </div>
 `;
+
 
 // إرسال التقييمات لواجهة المستخدم (UI)
 if(!isAuto) {
@@ -690,18 +694,52 @@ await Admin.updateTeamStatus(dataA.username);
     },
 
     pickRealisticScorer(lineup) {
-        const l = Object.values(lineup || {});
-        const squad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
-        const available = l.filter(name => {
-            let p = squad.find(x => x.n === name);
-            return p && (p.inj || 0) <= 0 && (p.susp || 0) <= 0;
-        });
-        if(available.length > 0) return available[Math.floor(Math.random() * available.length)];
-        const r = Math.random();
-        if (r < 0.75) return l[10] || l[9] || l[0]; 
-        if (r < 0.90) return l[6] || l[5]; 
-        return l[2] || l[1]; 
-    },
+    const activeLineup = [];
+    // جلب بيانات اللاعبين كاملة من الـ Squad بناءً على الأسماء الموجودة في التشكيلة
+    for (let i = 0; i < 11; i++) {
+        if (lineup[i]) {
+            const playerInfo = APP_STATE.user.squad.find(p => p.name === lineup[i]);
+            activeLineup.push({
+                name: lineup[i],
+                slot: i,
+                power: playerInfo ? (playerInfo.power || 50) : 50, // القوة الافتراضية 50 لو لم توجد
+                position: i // 0 حارس، 1-4 دفاع، 5-8 وسط، 9-10 هجوم
+            });
+        }
+    }
+
+    if (activeLineup.length === 0) return "لاعب مجهول";
+
+    // 1. تحديد الحارس وإعطائه احتمالية ثابتة 1%
+    if (Math.random() * 100 <= 1) {
+        return activeLineup.find(p => p.slot === 0)?.name || activeLineup[0].name;
+    }
+
+    // 2. لبقية الـ 99%، نوزع الاحتمالات بناءً على المركز + القوة
+    const outfieldPlayers = activeLineup.filter(p => p.slot !== 0);
+    
+    let totalWeight = 0;
+    const playersWithWeights = outfieldPlayers.map(p => {
+        let positionMultiplier = 1;
+        if (p.slot >= 9) positionMultiplier = 5;      // الهجوم وزنه 5 أضعاف
+        else if (p.slot >= 5) positionMultiplier = 2.5; // الوسط وزنه ضعفين ونصف
+        else positionMultiplier = 1;                  // الدفاع وزنه العادي
+
+        const weight = p.power * positionMultiplier;
+        totalWeight += weight;
+        return { ...p, weight };
+    });
+
+    // اختيار لاعب بناءً على الوزن
+    let random = Math.random() * totalWeight;
+    for (const p of playersWithWeights) {
+        if (random < p.weight) return p.name;
+        random -= p.weight;
+    }
+
+    return activeLineup[1].name; // تأمين إضافي
+}
+,
 
     getCPUTeam(name) {
     const t = APP_STATE.league.find(x => x.name === name);
