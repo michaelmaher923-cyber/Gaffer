@@ -518,12 +518,27 @@ const Engine = {
         let ratings = { h: {}, a: {} };
         const lineupH = Object.values(dataH.lineup || {});
         const lineupA = Object.values(dataA.lineup || {});
-        
-        [...lineupH, ...lineupA].forEach(n => {
-            if(n) ratings[lineupH.includes(n) ? 'h' : 'a'][n] = 6.0 + (Math.random() * 0.5);
+        const squadH = Array.isArray(dataH.squad) ? dataH.squad : Object.values(dataH.squad || {});
+        const squadA = Array.isArray(dataA.squad) ? dataA.squad : Object.values(dataA.squad || {});
+
+        // --- حساب التقييم المبدئي بناءً على قوة اللاعب ---
+        [...lineupH].forEach(n => {
+            if(n) {
+                let pData = squadH.find(x => x.n === n);
+                let base = pData ? (pData.p / 15) : 6.0; // اللاعب القوي يبدأ بتقييم أعلى قليلاً
+                ratings.h[n] = base + (Math.random() * 1.0);
+            }
+        });
+        [...lineupA].forEach(n => {
+            if(n) {
+                let pData = squadA.find(x => x.n === n);
+                let base = pData ? (pData.p / 15) : 6.0;
+                ratings.a[n] = base + (Math.random() * 1.0);
+            }
         });
 
         let sh = 0, sa = 0;
+        let ejectedPlayers = { h: [], a: [] };
 
         for (let m = 1; m <= 90; m++) {
             if(!isAuto) {
@@ -531,8 +546,7 @@ const Engine = {
                 document.getElementById('sim-timer').innerText = m + ":00";
             }
 
-            if (typeof ejectedPlayers === 'undefined') { var ejectedPlayers = { h: [], a: [] }; }
-
+            // حدث الإصابة
             if (Math.random() < 0.003) {
                 let side = Math.random() > 0.5 ? 'h' : 'a';
                 let sideLineup = side === 'h' ? lineupH : lineupA;
@@ -546,36 +560,18 @@ const Engine = {
                     let pIdx = sQ.findIndex(px => px.n === pName);
                     if (pIdx !== -1) { 
                         sQ[pIdx].inj = duration; 
-                        // لو الفريق كمبيوتر (مش موجود في مسار users)
-if (!sideData.username) {
-    db.ref(`league_data/${APP_STATE.league.findIndex(t => t.name === sideData.team)}/players/${pIdx}`).update({
-        inj: duration
-    });
-}
-
-                        sQ.forEach(player => {
-    // لو اللاعب مصاب "قديم" (مش اللي لسه متصاب حالا في pName)
-    if (player.inj > 0 && player.n !== pName) {
-        player.inj--; 
-    }
-    // لو اللاعب موقوف (كارت أحمر قديم)
-    if (player.susp > 0) {
-        player.susp--;
-    }
-});
-// --- نهاية الجزء الجديد ---
-
-// السطر اللي تحتهم المفروض يكون كدة (تأكد إنه موجود):
- 
-                          
+                        if (!sideData.username) {
+                            db.ref(`league_data/${APP_STATE.league.findIndex(t => t.name === sideData.team)}/players/${pIdx}`).update({ inj: duration });
+                        }
                     }
                     if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
                     ejectedPlayers[side].push(pName);
+                    ratings[side][pName] -= 1.0; // خصم من التقييم بسبب الخروج المبكر
                     matchEvents.push({ time: m, player: pName, type: 'injury', team: side, text: 'إصابة' });
                 }
             }
 
-                        // --- نظام الكروت (انذار / طرد) ---
+            // حدث الكروت
             let hRisk = (dataH.tactics?.press === 'aggr' ? 0.04 : 0.015);
             if (Math.random() < hRisk) {
                 let side = (Math.random() > 0.5 ? 'h' : 'a');
@@ -589,27 +585,28 @@ if (!sideData.username) {
                     
                     if (isRed) {
                         ejectedPlayers[side].push(pName);
+                        ratings[side][pName] -= 2.5; // خصم كبير بسبب الطرد
                         if(!isAuto) UI.addSimLog(`🟥 طرد! [${pName}]`, 'red');
                         matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
-                        
-                        // تحديث الإيقاف في قاعدة البيانات (لو مش ودية)
                         if (!isFriendly) {
                             let sideData = (side === 'h' ? dataH : dataA);
                             let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
                             let pIdx = sQ.findIndex(px => px.n === pName);
-                            if(pIdx !== -1) { sQ[pIdx].susp = 1;   }
+                            if(pIdx !== -1) sQ[pIdx].susp = 1;
                         }
                     } else {
+                        ratings[side][pName] -= 0.5; // خصم بسيط للإنذار
                         if(!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
                         matchEvents.push({ time: m, player: pName, type: 'yellow', team: side, text: 'إنذار' });
                     }
                 }
             }
 
-
+            // هدف صاحب الأرض
             if (Math.random() < (pH.atk / (pA.def + pA.gk + 2000)) * 0.25) {
                 sh++;
                 let scorer = this.pickRealisticScorer(lineupH.filter(p => !ejectedPlayers.h.includes(p)));
+                if(scorer) ratings.h[scorer] += 1.5; // زيادة كبيرة للمسجل
                 if(!isAuto) { 
                     UI.addSimLog(`⚽ هدف! ${hName} - [${scorer}] (${m}')`, 'var(--gold)'); 
                     document.getElementById('sim-score-h').innerText = sh; 
@@ -617,9 +614,11 @@ if (!sideData.username) {
                 matchEvents.push({ time: m, text: `هدف: ${hName}`, player: scorer, type: 'goal', team: 'h' });
             }
 
+            // هدف الضيف
             if (Math.random() < (pA.atk / (pH.def + pH.gk + 2200)) * 0.18) {
                 sa++;
                 let scorer = this.pickRealisticScorer(lineupA.filter(p => !ejectedPlayers.a.includes(p)));
+                if(scorer) ratings.a[scorer] += 1.5; 
                 if(!isAuto) { 
                     UI.addSimLog(`⚽ هدف! ${aName} - [${scorer}] (${m}')`, 'var(--blue)'); 
                     document.getElementById('sim-score-a').innerText = sa; 
@@ -628,13 +627,19 @@ if (!sideData.username) {
             }
         }
 
+        // مكافأة الحارس والدفاع في حال نظافة الشباك (Clean Sheet)
+        if(sa === 0) { lineupH.slice(0, 5).forEach(n => { if(ratings.h[n]) ratings.h[n] += 0.8; }); }
+        if(sh === 0) { lineupA.slice(0, 5).forEach(n => { if(ratings.a[n]) ratings.a[n] += 0.8; }); }
+
         if(!isAuto) { 
             UI.addSimLog("🏁 صافرة النهاية: " + sh + " - " + sa, "#fff"); 
             document.getElementById('end-sim-btn').style.display = "block"; 
         }
 
+        // تحديث قاعدة البيانات
         if (!isFriendly) {
             await this.updateTable(hName, aName, sh, sa);
+    
             await Admin.updateTeamStatus(dataH.username);
             await Admin.updateTeamStatus(dataA.username);
             for (let week in APP_STATE.schedule) {
@@ -651,6 +656,33 @@ if (!sideData.username) {
                 }
             }
         }
+        let finalRatingsHTML = `
+    <div style="display:flex; justify-content:space-around; text-align:right; direction:rtl;">
+        <div>
+            <h4>تقييمات ${hName}</h4>
+            ${lineupH.map(name => {
+                if(!name) return '';
+                let rate = ratings.h[name] || 6.0;
+                let color = rate >= 7.5 ? '#4CAF50' : (rate <= 5.5 ? '#f44336' : '#fff');
+                return `<p>${name}: <b style="color:${color}">${rate.toFixed(1)}</b></p>`;
+            }).join('')}
+        </div>
+        <div>
+            <h4>تقييمات ${aName}</h4>
+            ${lineupA.map(name => {
+                if(!name) return '';
+                let rate = ratings.a[name] || 6.0;
+                let color = rate >= 7.5 ? '#4CAF50' : (rate <= 5.5 ? '#f44336' : '#fff');
+                return `<p>${name}: <b style="color:${color}">${rate.toFixed(1)}</b></p>`;
+            }).join('')}
+        </div>
+    </div>
+`;
+
+// إرسال التقييمات لواجهة المستخدم (UI)
+if(!isAuto) {
+    UI.addSimLog(finalRatingsHTML, '#ddd'); 
+}
         // أضف هذا السطر في نهاية دالة simulate وقبل إغلاقها
 await Admin.updateTeamStatus(dataH.username);
 await Admin.updateTeamStatus(dataA.username);
