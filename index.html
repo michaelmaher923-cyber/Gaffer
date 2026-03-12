@@ -659,28 +659,34 @@ const Engine = {
         // --- عرض التقييمات بترتيب المراكز (0 للحارس، 10 للمهاجم) ---
         // --- عرض التقييمات بترتيب المراكز (من الحارس للهجوم) ---
         const renderSideRatings = (sideKey, teamName, teamData, colorVar) => {
-            let ratingsList = [];
-            // نمر على الخانات من 0 إلى 10 لضمان الترتيب
-            for (let i = 0; i <= 10; i++) {
-                let pName = teamData.lineup[i];
-                if (pName) {
-                    let rate = ratings[sideKey][pName] || 6.0;
-                    ratingsList.push({ name: pName, rate: rate });
-                }
-            }
+    let ratingsList = [];
+    
+    // التأكد إن lineup موجودة وهي مصفوفة أو كائن يمكن تحويله
+    const lineupArray = teamData.lineup || [];
 
-            return `
-                <div style="flex:1;">
-                    <h4 style="color:${colorVar}; border-bottom:1px solid #333; margin-bottom:10px; font-size:14px;">${teamName}</h4>
-                    ${ratingsList.map(p => {
-                        let c = p.rate >= 7.5 ? '#4CAF50' : (p.rate <= 5.5 ? '#f44336' : '#fff');
-                        return `<div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px; border-bottom:1px solid #111; padding-bottom:2px;">
-                                    <span style="color:#bbb; text-align:right;">${p.name}</span>
-                                    <b style="color:${c}; font-family:Orbitron;">${p.rate.toFixed(1)}</b>
-                                </div>`;
-                    }).join('')}
-                </div>`;
-        };
+    // نستخدم Object.keys عشان نضمن إننا بنمشي على المفاتيح بالترتيب الرقمي
+    Object.keys(lineupArray).sort((a, b) => parseInt(a) - parseInt(b)).forEach(i => {
+        let pName = lineupArray[i];
+        if (pName) {
+            // جلب التقييم أو وضع 6.0 كقيمة افتراضية
+            let rate = (ratings[sideKey] && ratings[sideKey][pName]) ? ratings[sideKey][pName] : 6.0;
+            ratingsList.push({ name: pName, rate: rate });
+        }
+    });
+
+    return `
+        <div style="flex:1;">
+            <h4 style="color:${colorVar}; border-bottom:1px solid #333; margin-bottom:10px; font-size:14px;">${teamName}</h4>
+            ${ratingsList.map(p => {
+                let c = p.rate >= 7.5 ? '#4CAF50' : (p.rate <= 5.5 ? '#f44336' : '#fff');
+                return `<div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px; border-bottom:1px solid #111; padding-bottom:2px;">
+                            <span style="color:#bbb; text-align:right;">${p.name}</span>
+                            <b style="color:${c}; font-family:Orbitron;">${p.rate.toFixed(1)}</b>
+                        </div>`;
+            }).join('')}
+        </div>`;
+};
+
 
         let finalRatingsHTML = `
             <div style="display:flex; justify-content:space-around; text-align:right; direction:rtl; gap:20px; background:#000; padding:15px; border-radius:10px; border:1px solid #222;">
