@@ -124,7 +124,7 @@
         <div style="padding:40px 20px; text-align:center; border-bottom:1px solid #222;">
             <i class="fas fa-shield-halved" style="font-size: 50px; color: var(--gold); margin-bottom: 15px;"></i>
             <h3 id="ui-my-team" style="color:var(--gold); font-size: 22px;">--</h3>
-            <p id="ui-my-name" style="color:#555; letter-spacing: 2px;">--</p>
+            <p id="ui-my-name" style="color:#555; letter-spacing: 2px; cursor:pointer; text-decoration:underline;" onclick="UI.showMyStats()">--</p>
         </div>
         <nav style="flex:1">
             <div class="nav-item active" onclick="UI.page('home', this)"><i class="fas fa-home"></i> الرئيسية</div>
@@ -667,14 +667,17 @@ if (isFriendly && weekName !== "") {
         const renderSideRatings = (sideKey, teamName, teamData, colorVar) => {
     let ratingsList = [];
     
-    // التأكد إن lineup موجودة وهي مصفوفة أو كائن يمكن تحويله
-    const lineupArray = teamData.lineup || [];
+    // 1. الحصول على التشكيلة (Lineup)
+    const lineupData = teamData.lineup || {};
 
-    // نستخدم Object.keys عشان نضمن إننا بنمشي على المفاتيح بالترتيب الرقمي
-    Object.keys(lineupArray).sort((a, b) => parseInt(a) - parseInt(b)).forEach(i => {
-        let pName = lineupArray[i];
+    // 2. تحويل مفاتيح الكائن إلى مصفوفة مرتبة رقمياً (0, 1, 2... وصولاً لـ 10)
+    // هذا يضمن أن الحارس (0) يظهر أولاً، ثم الدفاع، ثم الوسط، ثم الهجوم
+    const sortedKeys = Object.keys(lineupData).sort((a, b) => parseInt(a) - parseInt(b));
+
+    sortedKeys.forEach(key => {
+        let pName = lineupData[key];
         if (pName) {
-            // جلب التقييم أو وضع 6.0 كقيمة افتراضية
+            // جلب التقييم الفعلي من مصفوفة التقييمات المحسوبة في المحاكاة
             let rate = (ratings[sideKey] && ratings[sideKey][pName]) ? ratings[sideKey][pName] : 6.0;
             ratingsList.push({ name: pName, rate: rate });
         }
@@ -682,8 +685,9 @@ if (isFriendly && weekName !== "") {
 
     return `
         <div style="flex:1;">
-            <h4 style="color:${colorVar}; border-bottom:1px solid #333; margin-bottom:10px; font-size:14px;">${teamName}</h4>
+            <h4 style="color:${colorVar}; border-bottom:1px solid #333; margin-bottom:10px; font-size:14px; text-align:center;">${teamName}</h4>
             ${ratingsList.map(p => {
+                // تلوين التقييم بناءً على الأداء
                 let c = p.rate >= 7.5 ? '#4CAF50' : (p.rate <= 5.5 ? '#f44336' : '#fff');
                 return `<div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px; border-bottom:1px solid #111; padding-bottom:2px;">
                             <span style="color:#bbb; text-align:right;">${p.name}</span>
@@ -692,6 +696,7 @@ if (isFriendly && weekName !== "") {
             }).join('')}
         </div>`;
 };
+
 
 
         let finalRatingsHTML = `
@@ -971,6 +976,35 @@ const UI = {
         squad.forEach(p => totalPower += (parseInt(p.p) || 0));
         let avgPower = Math.round(totalPower / squad.length);
         let h = `<div style="text-align:center;"><h2 style="color:var(--gold)">${teamName}</h2><div class="budget-tag" style="margin:10px auto; width:fit-content;">المعدل: ${avgPower}</div><div style="max-height:300px; overflow-y:auto;"><table style="width:100%"><thead><tr><th>اللاعب</th><th>المركز</th><th>القوة</th></tr></thead><tbody>${squad.sort((a,b)=>(parseInt(b.p)||0)-(parseInt(a.p)||0)).map(p=>`<tr><td style="text-align:right">${p.n}</td><td style="color:var(--blue)">${p.pos||'--'}</td><td style="color:var(--gold)">${p.p}</td></tr>`).join('')}</tbody></table></div></div>`;
+        this.modal(h);
+    },
+    // الدالة الجديدة لعرض إحصائيات المدرب
+    showMyStats() {
+        if (!APP_STATE.user) return;
+        const s = APP_STATE.table[APP_STATE.user.team] || {w:0, d:0, l:0, pts:0, p:0};
+        const h = `
+            <div style="text-align:center; padding:10px;">
+                <i class="fas fa-user-tie" style="font-size:40px; color:var(--gold); margin-bottom:15px;"></i>
+                <h2 style="color:var(--gold); margin-bottom:20px;">سجل القائد: ${ME}</h2>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px;">
+                    <div style="background:#1a1a1a; padding:15px; border-radius:10px; border:1px solid #2e7d32;">
+                        <h4 style="color:#4CAF50;">فوز</h4>
+                        <h2 style="font-family:Orbitron;">${s.w}</h2>
+                    </div>
+                    <div style="background:#1a1a1a; padding:15px; border-radius:10px; border:1px solid #555;">
+                        <h4 style="color:#bbb;">تعادل</h4>
+                        <h2 style="font-family:Orbitron;">${s.d}</h2>
+                    </div>
+                    <div style="background:#1a1a1a; padding:15px; border-radius:10px; border:1px solid #ff3366;">
+                        <h4 style="color:#ff3366;">خسارة</h4>
+                        <h2 style="font-family:Orbitron;">${s.l}</h2>
+                    </div>
+                </div>
+                <div style="margin-top:20px; padding:15px; background:rgba(255,215,0,0.1); border-radius:10px;">
+                    <p style="color:#aaa;">إجمالي النقاط المحققة</p>
+                    <h1 style="color:var(--gold); font-family:Orbitron;">${s.pts}</h1>
+                </div>
+            </div>`;
         this.modal(h);
     },
 
