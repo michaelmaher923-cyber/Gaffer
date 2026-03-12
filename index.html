@@ -504,7 +504,7 @@ const Engine = {
     async simulate(hName, aName, isAuto = false, isFriendly = false, weekName = "") {
         if(!isAuto) UI.showSimOverlay(hName, aName);
         this.simSpeed = isAuto ? 0 : 2500; 
-        let matchEvents = [];
+        
         const snapH = await db.ref('users').orderByChild('team').equalTo(hName).once('value');
         const snapA = await db.ref('users').orderByChild('team').equalTo(aName).once('value');
         const dataH = Object.values(snapH.val() || {})[0] || this.getCPUTeam(hName);
@@ -514,31 +514,29 @@ const Engine = {
         
         const pH = this.calculatePower(dataH);
         const pA = this.calculatePower(dataA);
-        
+
+        // إحصائيات المباراة المتقدمة
+        let stats = {
+            h: { shots: [], fouls: 0, offsides: 0, passes: 0, saves: 0, pens: 0, possession: 0, heatmap: {} },
+            a: { shots: [], fouls: 0, offsides: 0, passes: 0, saves: 0, pens: 0, possession: 0, heatmap: {} }
+        };
+
         let ratings = { h: {}, a: {} };
         const lineupH = Object.values(dataH.lineup || {});
         const lineupA = Object.values(dataA.lineup || {});
-        const squadH = Array.isArray(dataH.squad) ? dataH.squad : Object.values(dataH.squad || {});
-        const squadA = Array.isArray(dataA.squad) ? dataA.squad : Object.values(dataA.squad || {});
-
-        // --- حساب التقييم المبدئي بناءً على قوة اللاعب ---
-        [...lineupH].forEach(n => {
-            if(n) {
-                let pData = squadH.find(x => x.n === n);
-                let base = pData ? (pData.p / 15) : 6.0; // اللاعب القوي يبدأ بتقييم أعلى قليلاً
-                ratings.h[n] = base + (Math.random() * 1.0);
-            }
-        });
-        [...lineupA].forEach(n => {
-            if(n) {
-                let pData = squadA.find(x => x.n === n);
-                let base = pData ? (pData.p / 15) : 6.0;
-                ratings.a[n] = base + (Math.random() * 1.0);
-            }
-        });
+        
+        // تحضير الخريطة الحرارية المبدئية لكل لاعب
+        [...lineupH, ...lineupA].forEach(p => { if(p) stats.h.heatmap[p] = { mins: 90, touches: 0, zone: 'mid' }; stats.a.heatmap[p] = { mins: 90, touches: 0, zone: 'mid' }; });
 
         let sh = 0, sa = 0;
+        let matchEvents = [];
         let ejectedPlayers = { h: [], a: [] };
+
+        // حساب الاستحواذ بناءً على قوة الوسط والتكتيك
+        let midPowerH = pH.mid * (dataH.tactics?.style === 'passing' ? 1.2 : 1);
+        let midPowerA = pA.mid * (dataA.tactics?.style === 'passing' ? 1.2 : 1);
+        stats.h.possession = Math.round((midPowerH / (midPowerH + midPowerA)) * 100);
+        stats.a.possession = 100 - stats.h.possession;
 
         for (let m = 1; m <= 90; m++) {
             if(!isAuto) {
@@ -546,102 +544,54 @@ const Engine = {
                 document.getElementById('sim-timer').innerText = m + ":00";
             }
 
-            // حدث الإصابة
-            if (Math.random() < 0.003) {
-                let side = Math.random() > 0.5 ? 'h' : 'a';
-                let sideLineup = side === 'h' ? lineupH : lineupA;
-                let activeOnPitch = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
-                let pName = activeOnPitch[Math.floor(Math.random() * activeOnPitch.length)];
-
-                if (pName) {
-                    let duration = Math.floor(Math.random() * 3) + 1;
-                    let sideData = side === 'h' ? dataH : dataA;
-                    let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
-                    let pIdx = sQ.findIndex(px => px.n === pName);
-                    if (pIdx !== -1) { 
-                        sQ[pIdx].inj = duration; 
-                        if (!sideData.username) {
-                            db.ref(`league_data/${APP_STATE.league.findIndex(t => t.name === sideData.team)}/players/${pIdx}`).update({ inj: duration });
-                        }
-                    }
-                    if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
-                    ejectedPlayers[side].push(pName);
-                    ratings[side][pName] -= 1.0; // خصم من التقييم بسبب الخروج المبكر
-                    matchEvents.push({ time: m, player: pName, type: 'injury', team: side, text: 'إصابة' });
-                }
+            // محاكاة التمريرات واللمسات (الخريطة الحرارية)
+            let attackingTeam = Math.random() < (stats.h.possession / 100) ? 'h' : 'a';
+            let lineup = attackingTeam === 'h' ? lineupH : lineupA;
+            let playerTouching = lineup[Math.floor(Math.random() * 11)];
+            if(playerTouching) {
+                stats[attackingTeam].passes += Math.floor(Math.random() * 5) + 1;
+                if(!stats[attackingTeam].heatmap[playerTouching]) stats[attackingTeam].heatmap[playerTouching] = {mins:90, touches:0};
+                stats[attackingTeam].heatmap[playerTouching].touches++;
             }
 
-            // حدث الكروت
-            let hRisk = (dataH.tactics?.press === 'aggr' ? 0.04 : 0.015);
-            if (Math.random() < hRisk) {
-                let side = (Math.random() > 0.5 ? 'h' : 'a');
-                let sideLineup = (side === 'h' ? lineupH : lineupA);
-                let activePlayers = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
-                let pName = activePlayers[Math.floor(Math.random() * activePlayers.length)];
-                
-                if(pName) {
-                    let hasYellow = matchEvents.find(e => e.player === pName && e.type === 'yellow' && e.team === side);
-                    let isRed = (Math.random() < 0.05 || hasYellow); 
-                    
-                    if (isRed) {
-                        ejectedPlayers[side].push(pName);
-                        ratings[side][pName] -= 2.5; // خصم كبير بسبب الطرد
-                        if(!isAuto) UI.addSimLog(`🟥 طرد! [${pName}]`, 'red');
-                        matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
-                        if (!isFriendly) {
-                            let sideData = (side === 'h' ? dataH : dataA);
-                            let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
-                            let pIdx = sQ.findIndex(px => px.n === pName);
-                            if(pIdx !== -1) sQ[pIdx].susp = 1;
-                        }
+            // منطق الفرص والتسديدات
+            let chanceProb = attackingTeam === 'h' ? (pH.atk / (pA.def + 500)) : (pA.atk / (pH.def + 500));
+            if (Math.random() < (chanceProb * 0.15)) {
+                let shooter = this.pickRealisticScorer(lineup.filter(p => !ejectedPlayers[attackingTeam].includes(p)));
+                let isOnTarget = Math.random() < 0.4;
+                let shotResult = "ضاعت";
+
+                if (isOnTarget) {
+                    let keeperPower = attackingTeam === 'h' ? pA.gk : pH.gk;
+                    if (Math.random() < (keeperPower / 2000)) {
+                        shotResult = "تصدي رائع";
+                        stats[attackingTeam === 'h' ? 'a' : 'h'].saves++;
                     } else {
-                        ratings[side][pName] -= 0.5; // خصم بسيط للإنذار
-                        if(!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
-                        matchEvents.push({ time: m, player: pName, type: 'yellow', team: side, text: 'إنذار' });
+                        shotResult = "سجلت هدفاً";
+                        if(attackingTeam === 'h') sh++; else sa++;
+                        matchEvents.push({ time: m, text: `هدف: [${shooter}]`, player: shooter, type: 'goal', team: attackingTeam });
                     }
                 }
+                stats[attackingTeam].shots.push({ player: shooter, minute: m, result: shotResult });
             }
 
-            // هدف صاحب الأرض
-            if (Math.random() < (pH.atk / (pA.def + pA.gk + 2000)) * 0.25) {
-                sh++;
-                let scorer = this.pickRealisticScorer(lineupH.filter(p => !ejectedPlayers.h.includes(p)));
-                if(scorer) ratings.h[scorer] += 1.5; // زيادة كبيرة للمسجل
-                if(!isAuto) { 
-                    UI.addSimLog(`⚽ هدف! ${hName} - [${scorer}] (${m}')`, 'var(--gold)'); 
-                    document.getElementById('sim-score-h').innerText = sh; 
-                }
-                matchEvents.push({ time: m, text: `هدف: ${hName}`, player: scorer, type: 'goal', team: 'h' });
-            }
-
-            // هدف الضيف
-            if (Math.random() < (pA.atk / (pH.def + pH.gk + 2200)) * 0.18) {
-                sa++;
-                let scorer = this.pickRealisticScorer(lineupA.filter(p => !ejectedPlayers.a.includes(p)));
-                if(scorer) ratings.a[scorer] += 1.5; 
-                if(!isAuto) { 
-                    UI.addSimLog(`⚽ هدف! ${aName} - [${scorer}] (${m}')`, 'var(--blue)'); 
-                    document.getElementById('sim-score-a').innerText = sa; 
-                }
-                matchEvents.push({ time: m, text: `هدف: ${aName}`, player: scorer, type: 'goal', team: 'a' });
-            }
+            // أخطاء وتسللات
+            if(Math.random() < 0.05) stats[attackingTeam].fouls++;
+            if(Math.random() < 0.03) stats[attackingTeam].offsides++;
         }
 
-        // مكافأة الحارس والدفاع في حال نظافة الشباك (Clean Sheet)
-        if(sa === 0) { lineupH.slice(0, 5).forEach(n => { if(ratings.h[n]) ratings.h[n] += 0.8; }); }
-        if(sh === 0) { lineupA.slice(0, 5).forEach(n => { if(ratings.a[n]) ratings.a[n] += 0.8; }); }
+        // تحديد اللاعب الأكثر استحواذاً
+        const getMostActive = (teamKey) => {
+            let maxTouches = 0, name = "غير محدد";
+            for(let p in stats[teamKey].heatmap) {
+                if(stats[teamKey].heatmap[p].touches > maxTouches) { maxTouches = stats[teamKey].heatmap[p].touches; name = p; }
+            }
+            return name;
+        };
 
-        if(!isAuto) { 
-            UI.addSimLog("🏁 صافرة النهاية: " + sh + " - " + sa, "#fff"); 
-            document.getElementById('end-sim-btn').style.display = "block"; 
-        }
-
-        // تحديث قاعدة البيانات
+        // حفظ البيانات النهائية
         if (!isFriendly) {
             await this.updateTable(hName, aName, sh, sa);
-    
-            await Admin.updateTeamStatus(dataH.username);
-            await Admin.updateTeamStatus(dataA.username);
             for (let week in APP_STATE.schedule) {
                 let matches = APP_STATE.schedule[week].matches || [];
                 let mIdx = matches.findIndex(m => m.h === hName && m.a === aName);
@@ -649,182 +599,19 @@ const Engine = {
                     await db.ref(`schedule/${week}/matches/${mIdx}`).update({
                         done: true, scoreH: sh, scoreA: sa,
                         events: matchEvents,
-                        ratings: ratings,
-                        lineups: { h: lineupH, a: lineupA }
-                        
+                        lineups: { h: lineupH, a: lineupA },
+                        advancedStats: {
+                            h: { ...stats.h, mostActive: getMostActive('h') },
+                            a: { ...stats.a, mostActive: getMostActive('a') }
+                        }
                     });
                     break;
                 }
             }
-            // تحديث سجل المباريات الودية للمستخدم في قاعدة البيانات
-if (isFriendly && weekName !== "") {
-    await db.ref(`users/${ME}`).update({ lastFriendlyWeek: weekName });
-}
-
         }
-        // --- عرض التقييمات بترتيب المراكز (0 للحارس، 10 للمهاجم) ---
-        // --- عرض التقييمات بترتيب المراكز (من الحارس للهجوم) ---
-        const renderSideRatings = (sideKey, teamName, teamData, colorVar) => {
-    let ratingsList = [];
-    
-    // 1. الحصول على التشكيلة (Lineup)
-    const lineupData = teamData.lineup || {};
-
-    // 2. تحويل مفاتيح الكائن إلى مصفوفة مرتبة رقمياً (0, 1, 2... وصولاً لـ 10)
-    // هذا يضمن أن الحارس (0) يظهر أولاً، ثم الدفاع، ثم الوسط، ثم الهجوم
-    const sortedKeys = Object.keys(lineupData).sort((a, b) => parseInt(a) - parseInt(b));
-
-    sortedKeys.forEach(key => {
-        let pName = lineupData[key];
-        if (pName) {
-            // جلب التقييم الفعلي من مصفوفة التقييمات المحسوبة في المحاكاة
-            let rate = (ratings[sideKey] && ratings[sideKey][pName]) ? ratings[sideKey][pName] : 6.0;
-            ratingsList.push({ name: pName, rate: rate });
-        }
-    });
-
-    return `
-        <div style="flex:1;">
-            <h4 style="color:${colorVar}; border-bottom:1px solid #333; margin-bottom:10px; font-size:14px; text-align:center;">${teamName}</h4>
-            ${ratingsList.map(p => {
-                // تلوين التقييم بناءً على الأداء
-                let c = p.rate >= 7.5 ? '#4CAF50' : (p.rate <= 5.5 ? '#f44336' : '#fff');
-                return `<div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px; border-bottom:1px solid #111; padding-bottom:2px;">
-                            <span style="color:#bbb; text-align:right;">${p.name}</span>
-                            <b style="color:${c}; font-family:Orbitron;">${p.rate.toFixed(1)}</b>
-                        </div>`;
-            }).join('')}
-        </div>`;
-};
-
-
-
-        let finalRatingsHTML = `
-            <div style="display:flex; justify-content:space-around; text-align:right; direction:rtl; gap:20px; background:#000; padding:15px; border-radius:10px; border:1px solid #222;">
-                ${renderSideRatings('h', hName, dataH, 'var(--gold)')}
-                <div style="width:1px; background:#222;"></div>
-                ${renderSideRatings('a', aName, dataA, 'var(--blue)')}
-            </div>
-        `;
-
-
-
-// إرسال التقييمات لواجهة المستخدم (UI)
-if(!isAuto) {
-    UI.addSimLog(finalRatingsHTML, '#ddd'); 
-}
-        // أضف هذا السطر في نهاية دالة simulate وقبل إغلاقها
-await Admin.updateTeamStatus(dataH.username);
-await Admin.updateTeamStatus(dataA.username);
-
+        if(!isAuto) document.getElementById('end-sim-btn').style.display = "block";
     },
 
-    pickRealisticScorer(lineup) {
-    const activeLineup = [];
-    // جلب بيانات اللاعبين كاملة من الـ Squad بناءً على الأسماء الموجودة في التشكيلة
-    for (let i = 0; i < 11; i++) {
-        if (lineup[i]) {
-            const playerInfo = APP_STATE.user.squad.find(p => p.name === lineup[i]);
-            activeLineup.push({
-                name: lineup[i],
-                slot: i,
-                power: playerInfo ? (playerInfo.power || 50) : 50, // القوة الافتراضية 50 لو لم توجد
-                position: i // 0 حارس، 1-4 دفاع، 5-8 وسط، 9-10 هجوم
-            });
-        }
-    }
-
-    if (activeLineup.length === 0) return "لاعب مجهول";
-
-    // 1. تحديد الحارس وإعطائه احتمالية ثابتة 1%
-    if (Math.random() * 100 <= 1) {
-        return activeLineup.find(p => p.slot === 0)?.name || activeLineup[0].name;
-    }
-
-    // 2. لبقية الـ 99%، نوزع الاحتمالات بناءً على المركز + القوة
-    const outfieldPlayers = activeLineup.filter(p => p.slot !== 0);
-    
-    let totalWeight = 0;
-    const playersWithWeights = outfieldPlayers.map(p => {
-        let positionMultiplier = 1;
-        if (p.slot >= 9) positionMultiplier = 5;      // الهجوم وزنه 5 أضعاف
-        else if (p.slot >= 5) positionMultiplier = 2.5; // الوسط وزنه ضعفين ونصف
-        else positionMultiplier = 1;                  // الدفاع وزنه العادي
-
-        const weight = p.power * positionMultiplier;
-        totalWeight += weight;
-        return { ...p, weight };
-    });
-
-    // اختيار لاعب بناءً على الوزن
-    let random = Math.random() * totalWeight;
-    for (const p of playersWithWeights) {
-        if (random < p.weight) return p.name;
-        random -= p.weight;
-    }
-
-    return activeLineup[1].name; // تأمين إضافي
-}
-,
-
-    getCPUTeam(name) {
-    const t = APP_STATE.league.find(x => x.name === name);
-    if(!t) return {team: name, squad: [], lineup: {}, tactics: {style:'normal'}};
-    
-    // تعديل هنا: إضافة inj و susp لكل لاعب كمبيوتر بشكل تلقائي
-    const enhancedPlayers = t.players.map(p => ({
-        ...p,
-        inj: p.inj || 0,
-        susp: p.susp || 0
-    }));
-
-    const sorted = [...enhancedPlayers].sort((a,b) => b.p - a.p);
-    let lineup = {};
-    sorted.slice(0, 11).forEach((p, i) => lineup[i] = p.n);
-    
-    return { team: name, squad: enhancedPlayers, lineup: lineup, tactics: {style: 'normal'} };
-},
-
-
-    calculatePower(u) {
-        let p = { atk: 0, mid: 0, def: 0, gk: 0, synergy: 1.0 };
-        const lineup = u.lineup || {};
-        const squad = Array.isArray(u.squad) ? u.squad : Object.values(u.squad || {});
-
-        for (let i in lineup) {
-            const pName = lineup[i];
-            const pData = squad.find(x => x.n === pName);
-            if (pData) {
-                let val = parseInt(pData.p) || 0;
-                let pos = (pData.pos || pData.Pos || "").toUpperCase();
-                let slotIdx = parseInt(i);
-                let multiplier = 1.0;
-
-                if (slotIdx === 0) { 
-                    if (pos !== "GK") multiplier = 0.5; 
-                    p.gk += (val * multiplier);
-                } 
-                else if (slotIdx >= 1 && slotIdx <= 4) { 
-                    if (!["CB", "LB", "RB", "DF"].includes(pos)) multiplier = 0.7; 
-                    p.def += (val * multiplier);
-                } 
-                else if (slotIdx >= 5 && slotIdx <= 8) { 
-                    if (!["CM", "LM", "RM", "CDM", "CAM", "MF"].includes(pos)) multiplier = 0.8; 
-                    p.mid += (val * multiplier);
-                } 
-                else { 
-                    if (!["ST", "RW", "LW", "CF", "FW"].includes(pos)) multiplier = 0.7;
-                    p.atk += (val * multiplier);
-                }
-            }
-        }
-
-        if (u.tactics?.style === 'attack') p.atk *= 1.2;
-        if (u.tactics?.style === 'defend') p.def *= 1.2;
-        if (u.specialists?.captain) p.synergy = 1.1; 
-
-        return p;
-    },
 
     async updateTable(h, a, sh, sa) {
         const up = async (n, pts, w, d, l, gf, ga) => {
@@ -1454,17 +1241,8 @@ runFriendly(opp) {
             if(document.getElementById('val-risk')) document.getElementById('val-risk').innerText = getLbl(r, ["معدومة", "قليلة", "عادية", "كثيرة", "كثيرة جداً"]);
         },
 
-                    async showMatchDetails(hName, aName, isDone, sH, sA) {
-        if (isDone === 'false' || isDone === false || isDone === undefined) return; 
-
-        const audioZ = document.getElementById('audio-zamalek');
-        if (audioZ) {
-            audioZ.pause();
-            audioZ.currentTime = 0;
-            if ((hName === "الزمالك" && sH > sA) || (aName === "الزمالك" && sA > sH)) {
-                audioZ.play().catch(e => console.log("التفاعل مطلوب"));
-            }
-        }
+                        async showMatchDetails(hName, aName, isDone, sH, sA) {
+        if (!isDone || isDone === 'false') return;
 
         let matchData = null;
         for (let w in APP_STATE.schedule) {
@@ -1473,66 +1251,54 @@ runFriendly(opp) {
             if (matchData) break;
         }
 
-        if (!matchData) return alert("بيانات المباراة غير متوفرة حالياً");
+        if (!matchData || !matchData.advancedStats) return alert("التقرير التفصيلي متاح للمباريات الجديدة فقط");
 
-        // مصفوفة تعريف الأيقونات لضمان عدم التداخل
-        const eventIcons = {
-            'goal': { icon: '⚽', color: 'var(--gold)' },
-            'yellow': { icon: '🟨', color: '#ffeb3b' },
-            'red': { icon: '🟥', color: '#ff3366' },
-            'injury': { icon: '🚑', color: '#ffa500' }
-        };
+        const s = matchData.advancedStats;
 
-        let eventsHtml = (matchData.events || []).map(e => {
-            const config = eventIcons[e.type] || { icon: '•', color: '#fff' };
-            return `
-                <div style="display:flex; align-items:center; gap:10px; padding:10px; border-bottom:1px solid #222; font-size:13px; background: rgba(255,255,255,0.02);">
-                    <span style="color:var(--gold); font-family:'Orbitron'; width:35px; flex-shrink:0;">${e.time}'</span>
-                    <span style="font-size:18px; width:25px; text-align:center; flex-shrink:0;">${config.icon}</span>
-                    <span style="flex:1; text-align:right; font-weight:bold;">
-                        ${e.player} <small style="color:${config.color}; font-weight:normal;">(${e.text})</small>
-                    </span>
+        let statsTable = `
+            <div style="background:#111; padding:15px; border-radius:10px; margin-top:15px; font-size:13px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid #222; padding-bottom:5px;">
+                    <span style="color:var(--gold)">${s.h.possession}%</span>
+                    <span>الاستحواذ</span>
+                    <span style="color:var(--blue)">${s.a.possession}%</span>
                 </div>
-            `;
-        }).join('') || "<p style='text-align:center; color:#555; padding:20px;'>مباراة تكتيكية بدون أحداث كبرى</p>";
-
-        let ratingsHtml = `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:15px;">`;
-        const sides = [{key: 'h', name: hName}, {key: 'a', name: aName}];
-        sides.forEach(side => {
-            let playersRatings = matchData.ratings ? matchData.ratings[side.key] : null;
-            ratingsHtml += `<div style="background:#050505; padding:10px; border-radius:10px; border:1px solid #222;">
-                <h6 style="color:var(--gold); border-bottom:1px solid #333; margin-bottom:8px; padding-bottom:4px; font-size:12px;">${side.name}</h6>`;
-            if (playersRatings) {
-                for (let playerName in playersRatings) {
-                    let score = playersRatings[playerName];
-                    ratingsHtml += `
-                        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px; border-bottom:1px solid #111; padding:2px 0;">
-                            <span style="color:#bbb;">${playerName}</span>
-                            <b style="color:${score >= 7.5 ? '#00ff00' : (score >= 6.5 ? '#fff' : '#ff4444')}">${score.toFixed(1)}</b>
-                        </div>`;
-                }
-            } else { ratingsHtml += `<p style="font-size:10px; color:#444;">لا توجد تقييمات</p>`; }
-            ratingsHtml += `</div>`;
-        });
-        ratingsHtml += `</div>`;
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span>${s.h.shots.length}</span> <span>التسديدات</span> <span>${s.a.shots.length}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span>${s.h.passes}</span> <span>التمريرات</span> <span>${s.a.passes}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span>${s.h.saves}</span> <span>تصديات الحارس</span> <span>${s.a.saves}</span>
+                </div>
+                 <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span>${s.h.fouls}</span> <span>الأخطاء</span> <span>${s.a.fouls}</span>
+                </div>
+            </div>
+            <div style="margin-top:15px; background:#000; padding:10px; border:1px solid var(--gold); border-radius:10px;">
+                <h5 style="color:var(--gold); font-size:12px;">أكثر اللاعبين استحواذاً</h5>
+                <div style="display:flex; justify-content:space-around; font-size:12px; margin-top:5px;">
+                    <span>🏠 ${s.h.mostActive}</span>
+                    <span>✈️ ${s.a.mostActive}</span>
+                </div>
+            </div>
+            <h5 style="margin-top:20px; color:var(--gold); text-align:right;">سجل التسديدات:</h5>
+            <div style="max-height:150px; overflow-y:auto; text-align:right; font-size:11px; background:#111; padding:10px;">
+                ${s.h.shots.map(sh => `<p>🏠 [${sh.minute}'] ${sh.player}: ${sh.result}</p>`).join('')}
+                ${s.a.shots.map(sh => `<p>✈️ [${sh.minute}'] ${sh.player}: ${sh.result}</p>`).join('')}
+            </div>
+            <p style="font-size:10px; color:#555; margin-top:10px;">* اضغط على أي لاعب في التشكيلة الأساسية لمشاهدة خريطته الحرارية (قريباً)</p>
+        `;
 
         this.modal(`
             <div style="text-align:center;">
-                <h3 style="color:var(--gold); font-family:'Orbitron'; margin-bottom:15px;">تقرير المباراة</h3>
-                <div style="display:flex; justify-content:space-around; align-items:center; margin-bottom:20px; background:#000; padding:20px; border-radius:15px; border:1px solid #222;">
-                    <div style="flex:1;"><h4 style="font-size:14px;">${hName}</h4><h1 style="font-size:40px; color:#fff;">${sH}</h1></div>
-                    <div style="font-family:'Orbitron'; color:var(--gold); font-size:18px; opacity:0.3;">VS</div>
-                    <div style="flex:1;"><h4 style="font-size:14px;">${aName}</h4><h1 style="font-size:40px; color:#fff;">${sA}</h1></div>
-                </div>
-                <div style="text-align:right; max-height:400px; overflow-y:auto;">
-                    <h5 style="color:var(--blue); border-right:3px solid var(--blue); padding-right:10px; margin-bottom:10px;">الأحداث والوقائع</h5>
-                    ${eventsHtml}
-                    <h5 style="color:var(--gold); border-right:3px solid var(--gold); padding-right:10px; margin-top:20px; margin-bottom:10px;">تقييمات اللاعبين</h5>
-                    ${ratingsHtml}
-                </div>
+                <h2 style="font-family:Orbitron; color:var(--gold);">${sH} - ${sA}</h2>
+                <p style="color:#777;">${hName} VS ${aName}</p>
+                ${statsTable}
             </div>
         `);
     }
+
 
 };
 
