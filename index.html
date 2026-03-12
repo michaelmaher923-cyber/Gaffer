@@ -501,7 +501,7 @@ const Engine = {
 
 
     // --- بقية الدوال الخاصة بالمحاكاة كما هي في كودك الأصلي ---
-    async simulate(hName, aName, isAuto = false, isFriendly = false) {
+    async simulate(hName, aName, isAuto = false, isFriendly = false, weekName = "") {
         if(!isAuto) UI.showSimOverlay(hName, aName);
         this.simSpeed = isAuto ? 0 : 2500; 
         let matchEvents = [];
@@ -651,10 +651,16 @@ const Engine = {
                         events: matchEvents,
                         ratings: ratings,
                         lineups: { h: lineupH, a: lineupA }
+                        
                     });
                     break;
                 }
             }
+            // تحديث سجل المباريات الودية للمستخدم في قاعدة البيانات
+if (isFriendly && weekName !== "") {
+    await db.ref(`users/${ME}`).update({ lastFriendlyWeek: weekName });
+}
+
         }
         // --- عرض التقييمات بترتيب المراكز (0 للحارس، 10 للمهاجم) ---
         // --- عرض التقييمات بترتيب المراكز (من الحارس للهجوم) ---
@@ -1336,31 +1342,29 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
         APP_STATE.league.forEach(t => { if(t.name !== APP_STATE.user.team) h += `<button class="btn-gold" style="margin-top:10px;" onclick="UI.runFriendly('${t.name}')">${t.name}</button>`; });
         this.modal(h);
     },
-        runFriendly(opp) { this.closeModal(); Engine.simulate(APP_STATE.user.team, opp, false, true); },
-    showAdmin() {
-        this.modal(`<h3>لوحة القائد مايكل</h3><button class="btn-gold" onclick="Admin.resetTable()">تصفير الجدول</button><textarea id="json-inj" style="height:150px; margin-top:10px;" placeholder="JSON"></textarea><button class="btn-gold" onclick="Admin.doInject()">حقن الفرق</button><button class="btn-gold" style="background:red; margin-top:10px;" onclick="Admin.generateDraw()">إجراء القرعة</button>
-         `);
-        
-    },
-        renderPress() {
-        // قمنا بتوحيد المسار ليكون 'News' كما هو في دالة الإرسال
-        db.ref('News').limitToLast(15).on('value', s => {
-            const feed = document.getElementById('press-feed');
-            if(feed) {
-                const data = s.val() || {};
-                // عرض الرسائل بترتيب تنازلي (الأحدث فوق)
-                feed.innerHTML = Object.values(data).reverse().map(m => `
-                    <div class="offer-card" style="border-right-color: var(--gold); margin-bottom: 8px;">
-                        <div style="display:flex; justify-content:space-between; font-size:12px; color:#777;">
-                            <b>${m.team}</b>
-                            <span>${m.time || ''}</span>
-                        </div>
-                        <div style="margin-top:5px; color:#fff;">${m.msg}</div>
-                    </div>
-                `).join('');
-            }
-        });
-    },
+        // استبدل دالة runFriendly القديمة بهذا الكود
+runFriendly(opp) { 
+    const now = Date.now();
+    let currentWeek = "الجولة_1"; 
+    
+    // 1. تحديد الجولة الحالية بناءً على جدول الدوري
+    for (let week in APP_STATE.schedule) {
+        if (now >= APP_STATE.schedule[week].time) currentWeek = week;
+    }
+
+    // 2. التحقق إذا كان المدرب لعب ودي في هذه الجولة سابقاً
+    if (APP_STATE.user.lastFriendlyWeek === currentWeek) {
+        return alert(`⚠️ عذراً! مسموح بمباراة ودية واحدة فقط في كل جولة. انتظر حتى تبدأ [الجولة القادمة].`);
+    }
+
+    // 3. تحديث قاعدة البيانات فوراً "قبل" البدء لمنع الضغط المتكرر
+    db.ref(`users/${ME}`).update({ lastFriendlyWeek: currentWeek });
+
+    // 4. إغلاق المودال وبدء المحاكاة
+    this.closeModal(); 
+    Engine.simulate(APP_STATE.user.team, opp, false, true, currentWeek); 
+}
+,
 
     openPlayerSelection(sIdx) {
     APP_STATE.currentSlot = sIdx;
