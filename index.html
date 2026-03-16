@@ -330,6 +330,7 @@
 </div>
 
 <script>
+
 const firebaseConfig = { 
     apiKey: "AIzaSyDhh0xovPTP1WelHbxa4YqwSRIW7ZoBS_Y", 
     databaseURL: "https://accountant-5a22d-default-rtdb.firebaseio.com" 
@@ -380,49 +381,106 @@ const Core = {
     },
 
     startSync() {
+    
         db.ref('league_data').on('value', s => { APP_STATE.league = s.val() || []; UI.renderLeague(); this.refresh(); });
         db.ref('taken_teams').on('value', s => { APP_STATE.taken = s.val() || {}; this.refresh(); });
         db.ref('users/'+ME).on('value', s => { APP_STATE.user = s.val(); this.refresh(); });
         db.ref('league_table').on('value', s => { APP_STATE.table = s.val() || {}; UI.renderLeague(); });
         db.ref('schedule').on('value', s => { 
             APP_STATE.schedule = s.val() || {}; 
+            UI.autoSubstitute(APP_STATE.currentUser);
+
             UI.renderHome();
             AutoEngine.checkAndRun();
         });
         db.ref('offers').on('value', s => { UI.renderOffers(s.val()); });
     },
 
-    refresh() {
+        refresh() {
         if(!APP_STATE.user) return;
-        if(APP_STATE.user.team === "") { UI.screen('scr-picker'); UI.renderPicker(); 
-const sel = document.getElementById('train-player-select'); if(sel && APP_STATE.user.squad) { const sq = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {}); sel.innerHTML = sq.map(p => `<option value="${p.n}">${p.n} (قوة: ${p.p})</option>`).join(''); }
 
-} 
-        else { UI.screen('scr-main'); UI.renderDashboard(); }
+        // الشرط الجديد: لو الحقل فاضي أو مكتوب فيه "بدون فريق"
+        if(APP_STATE.user.team === "" || APP_STATE.user.team === "بدون فريق") { 
+            UI.screen('scr-picker'); 
+            UI.renderPicker(); 
+            
+            const sel = document.getElementById('train-player-select'); 
+            if(sel && APP_STATE.user.squad) { 
+                const sq = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {}); 
+                sel.innerHTML = sq.map(p => `<option value="${p.n}">${p.n} (قوة: ${p.p})</option>`).join(''); 
+            }
+        } 
+        else { 
+            UI.screen('scr-main'); 
+            UI.renderDashboard(); 
+        }
     },
 
     async pickTeam(name) {
-        
-        if(APP_STATE.taken[name]) return alert("محجوز!");
-        const teamData = APP_STATE.league.find(t => t.name === name);
-        await db.ref('taken_teams/'+name).set(ME);
-        // نقوم بعمل خريطة (Map) للاعبين لضمان انتقال حقل الـ pos
-const cleanSquad = teamData.players.map(p => ({
-    n: p.n,
-    p: p.p,
-    pos: p.pos || p.Pos || "---", // جلب المركز بأي صيغة
-    inj: 0,
-    susp: 0
-}));
-await db.ref('users/'+ME).update({ team: name, squad: cleanSquad });
-        await db.ref('league_table/'+name).transaction(c => c || {p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0});
-    }
+    if(APP_STATE.taken[name]) return alert("هذا الفريق محجوز!");
+    
+    const teamData = APP_STATE.league.find(t => t.name === name);
+    if(!teamData) return;
+
+    // 1. تنظيف مصفوفة اللاعبين
+    const cleanSquad = teamData.players.map(p => ({
+        n: p.n,
+        p: p.p,
+        pos: p.pos || p.Pos || "---",
+        inj: 0,
+        susp: 0
+    }));
+
+    // 2. إنشاء تشكيلة افتراضية (مهم جداً لظهور الملعب)
+    const defaultLineup = {
+        formation: "442", // أو الخطة الافتراضية عندك
+        players: {} // كودك غالباً يتوقع كائن فارغ هنا أو توزيع معين
+    };
+
+    // 3. التحديث في قاعدة البيانات
+    await db.ref('users/'+ME).update({ 
+        team: name, 
+        squad: cleanSquad,
+        lineup: defaultLineup, // إضافة التشكيلة من جديد
+        tactics: { style: "متوازن", pressure: 50, mentality: "هجومي" } // إضافة تكتيكات افتراضية
+    });
+
+    await db.ref('taken_teams/'+name).set(ME);
+    await db.ref('league_table/'+name).transaction(c => c || {p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0});
+    
+    // إعادة تحميل الصفحة لتطبيق التغييرات
+    location.reload();
+}
+
     
 };
 
 const Engine = {
     simSpeed: 3333,
+    
+getBestSubstitute(squad, lineupNames, targetPos) {
+        // جلب اللاعبين الموجودين على الدكة فقط (الذين ليسوا في التشكيلة الأساسية وغير مصابين)
+        const bench = squad.filter(p => !lineupNames.includes(p.n) && (!p.inj || p.inj <= 0) && (!p.susp || p.susp <= 0));
+        
+        if (bench.length === 0) return null;
 
+        // محاولة إيجاد لاعب بنفس المركز بالضبط
+        let sub = bench.find(p => p.pos === targetPos);
+        
+        // إذا لم يوجد، نبحث عن لاعب في نفس الخط (مثلاً مدافع لمدافع)
+        if (!sub) {
+            const zone = targetPos.charAt(0); // D, M, A
+            sub = bench.find(p => p.pos.startsWith(zone));
+        }
+        
+        // إذا لم يوجد، نأخذ أقوى لاعب متاح على الدكة كخيار أخير
+        if (!sub) {
+            sub = bench.sort((a, b) => b.p - a.p)[0];
+        }
+        
+        return sub;
+    },
+    
     // 1. إرسال العرض وتفعيل رد الكمبيوتر أو المدرب (معدلة لمنع التكرار)
     async sendOffer(targetTeam, playerName, price) {
         const now = Date.now();
@@ -513,7 +571,38 @@ const Engine = {
         
         const pH = this.calculatePower(dataH);
         const pA = this.calculatePower(dataA);
-        
+        // --- داخل دالة simulate ---
+
+// 1. في بداية الدالة، حدد من لعبوا فعلياً (الأساسيين)
+let playersWhoPlayedH = new Set(Object.values(lineupH).filter(n => n));
+let playersWhoPlayedA = new Set(Object.values(lineupA).filter(n => n));
+
+// 2. عند حدوث التبديل الاضطراري (الذي أضفناه سابقاً)، أضف البديل للقائمة:
+if (sub) {
+    currentLineup[randomSlot] = sub.n;
+    // إضافة اللاعب البديل لقائمة المشاركين
+    if (isHome) playersWhoPlayedH.add(sub.n); 
+    else playersWhoPlayedA.add(sub.n);
+    
+    this.addLog(`🔄 تبديل اضطراري: دخول [${sub.n}] بدلاً من [${injuredName}]`, isHome ? 'h' : 'a');
+}
+
+// 3. عند نهاية المباراة (توزيع التقييمات)، عدل الحلقة لتشمل المشاركين فقط:
+const applyRatings = (squad, participants) => {
+    squad.forEach(p => {
+        if (participants.has(p.n)) {
+            // اللاعب لعب -> نعطيه تقييم عشوائي بين 5 و 10
+            p.rat = (Math.random() * 5 + 5).toFixed(1);
+        } else {
+            // اللاعب لم يلعب -> تقييمه 0 أو "لم يلعب"
+            p.rat = 0; 
+        }
+    });
+};
+
+applyRatings(squadH, playersWhoPlayedH);
+applyRatings(squadA, playersWhoPlayedA);
+
         let ratings = { h: {}, a: {} };
         const lineupH = Object.values(dataH.lineup || {});
         const lineupA = Object.values(dataA.lineup || {});
@@ -556,29 +645,45 @@ const Engine = {
             }
 
             // حدث الإصابة
-            if (Math.random() < 0.003) {
-                let side = Math.random() > 0.5 ? 'h' : 'a';
-                let sideLineup = side === 'h' ? lineupH : lineupA;
-                let activeOnPitch = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
-                let pName = activeOnPitch[Math.floor(Math.random() * activeOnPitch.length)];
+            // داخل حلقة المحاكاة (من الدقيقة 1 لـ 90)
+if (Math.random() < 0.02) { // احتمالية حدوث إصابة
+    const isHome = Math.random() < 0.5;
+    const teamData = isHome ? dataH : dataA;
+    const lineup = isHome ? lineupH : lineupA;
+    const squad = isHome ? squadH : squadA;
+    const teamName = isHome ? hName : aName;
 
-                if (pName) {
-                    let duration = Math.floor(Math.random() * 3) + 1;
-                    let sideData = side === 'h' ? dataH : dataA;
-                    let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
-                    let pIdx = sQ.findIndex(px => px.n === pName);
-                    if (pIdx !== -1) { 
-                        sQ[pIdx].inj = duration; 
-                        if (!sideData.username) {
-                            db.ref(`league_data/${APP_STATE.league.findIndex(t => t.name === sideData.team)}/players/${pIdx}`).update({ inj: duration });
-                        }
-                    }
-                    if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
-                    ejectedPlayers[side].push(pName);
-                    ratings[side][pName] -= 1.0; // خصم من التقييم بسبب الخروج المبكر
-                    matchEvents.push({ time: m, player: pName, type: 'injury', team: side, text: 'إصابة' });
-                }
+    // اختيار لاعب عشوائي من التشكيلة الحالية ليصاب
+    const activePlayers = Object.keys(lineup).filter(slot => lineup[slot]);
+    const injuredSlot = activePlayers[Math.floor(Math.random() * activePlayers.length)];
+    const injuredPlayerName = lineup[injuredSlot];
+    const injuredPlayerData = squad.find(p => p.n === injuredPlayerName);
+
+    if (injuredPlayerData) {
+        // 1. تسجيل الإصابة
+        injuredPlayerData.inj = Math.floor(Math.random() * 3) + 1; 
+        this.addLog(`🚑 إصابة خطيرة للاعب [${injuredPlayerName}] لن يستطيع الإكمال!`, isHome ? 'h' : 'a');
+
+        // 2. البحث عن بديل من الدكة
+        const currentLineupNames = Object.values(lineup);
+        const substitute = this.getBestSubstitute(squad, currentLineupNames, injuredPlayerData.pos);
+
+        if (substitute) {
+            // تنفيذ التبديل التلقائي في التشكيلة المؤقتة للمباراة
+            lineup[injuredSlot] = substitute.n;
+            this.addLog(`🔄 تبديل اضطراري: دخول [${substitute.n}] بدلاً من [${injuredPlayerName}]`, isHome ? 'h' : 'a');
+            
+            // تحديث قاعدة البيانات إذا كانت المباراة رسمية (اختياري حسب رغبتك)
+            if (!isFriendly) {
+                db.ref(`users/${isHome ? Object.keys(snapH.val())[0] : Object.keys(snapA.val())[0]}/lineup/${injuredSlot}`).set(substitute.n);
             }
+        } else {
+            this.addLog(`⚠️ لا يوجد بدلاء على الدكة! ${teamName} سيكمل المباراة بنقص عددي.`, isHome ? 'h' : 'a');
+            lineup[injuredSlot] = null; // خروج اللاعب دون بديل
+        }
+    }
+}
+
 
             // حدث الكروت
             let hRisk = (dataH.tactics?.press === 'aggr' ? 0.04 : 0.015);
@@ -716,22 +821,18 @@ if (isFriendly && weekName !== "") {
         // --- عرض التقييمات بترتيب المراكز (من الحارس للهجوم) ---
         const renderSideRatings = (sideKey, teamName, teamData, colorVar) => {
     let ratingsList = [];
-    
-    // 1. الحصول على التشكيلة (Lineup)
-    const lineupData = teamData.lineup || {};
+    // نجلب فقط من بدأ المباراة أو دخل كبديل
+    const starters = Object.values(teamData.lineup || {});
+    const subsIn = (teamData.subsPerformed || []).map(s => s.playerIn);
+    const participants = [...starters, ...subsIn];
 
-    // 2. تحويل مفاتيح الكائن إلى مصفوفة مرتبة رقمياً (0, 1, 2... وصولاً لـ 10)
-    // هذا يضمن أن الحارس (0) يظهر أولاً، ثم الدفاع، ثم الوسط، ثم الهجوم
-    const sortedKeys = Object.keys(lineupData).sort((a, b) => parseInt(a) - parseInt(b));
+    if (teamData.squad) {
+        const allPlayers = Array.isArray(teamData.squad) ? teamData.squad : Object.values(teamData.squad);
+        // الفلترة هنا هي التي ستخفي الدكة التي لم تشارك
+        ratingsList = allPlayers.filter(p => participants.includes(p.name));
+    }
+;
 
-    sortedKeys.forEach(key => {
-        let pName = lineupData[key];
-        if (pName) {
-            // جلب التقييم الفعلي من مصفوفة التقييمات المحسوبة في المحاكاة
-            let rate = (ratings[sideKey] && ratings[sideKey][pName]) ? ratings[sideKey][pName] : 6.0;
-            ratingsList.push({ name: pName, rate: rate });
-        }
-    });
 
     return `
         <div style="flex:1;">
@@ -981,6 +1082,13 @@ const AutoEngine = {
                         await db.ref(`schedule/${week}/matches/${i}`).update({ running: true });
                         await Engine.simulate(m.h, m.a, true, false); 
                         await db.ref(`schedule/${week}/matches/${i}`).update({ done: true, running: null });
+                        await Admin.updateAllPlayersStatus();
+                        await Admin.updateAllLeaguesStatus();
+                        // التحديث التلقائي للإصابات فور انتهاء الماتش
+                        await Admin.updateAllPlayersStatus();
+                        if (typeof Admin.updateAllLeaguesStatus === "function") {
+                            await Admin.updateAllLeaguesStatus();
+                        }
                     }
                 }
             }
@@ -992,6 +1100,56 @@ const AutoEngine = {
 
 
 const UI = {
+showAdmin() {
+    const adminHtml = `
+        <div class="content-card" style="grid-column: span 2;">
+            <h2 style="color:var(--red); border-bottom:2px solid var(--red); padding-bottom:10px; margin-bottom:20px;">
+                <i class="fas fa-user-shield"></i> لوحة تحكم القائد مايكل ماهر
+            </h2>
+
+            <div style="background:#1a1a1a; padding:15px; border-radius:10px; margin-bottom:20px; border:1px solid var(--border);">
+                <h3 style="color:var(--gold); font-size:14px; margin-bottom:10px;">
+                    <i class="fas fa-database"></i> 2. حقن بيانات الدوري (JSON)
+                </h3>
+                <textarea id="json-inj" placeholder="الصق ملف الـ JSON هنا..." 
+                    style="width:100%; height:100px; background:#000; color:var(--green); border:1px solid #333; border-radius:5px; padding:10px; font-family:monospace; font-size:12px;"></textarea>
+                <button class="btn-gold" style="width:100%; margin-top:10px; background:var(--blue);" onclick="Admin.doInject()">
+                    تنفيذ حقن البيانات
+                </button>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                
+                <button class="btn-gold" style="background:var(--red);" onclick="Admin.resetTable()">
+                    <i class="fas fa-trash-alt"></i> 1. تصفير الجدول
+                </button>
+
+                <button class="btn-gold" style="background:var(--green);" onclick="Admin.generateDraw()">
+                    <i class="fas fa-random"></i> 3. توليد القرعة (الجدولة)
+                </button>
+
+           
+<button onclick="Admin.resetSeason()" style="background: var(--red); color: white; padding: 10px; border-radius: 8px; cursor: pointer; border: none; font-weight: bold; margin: 10px;">
+    <i class="fas fa-trash-alt"></i> تصفير الموسم (بدء موسم جديد)
+</button>
+
+            </div>
+
+            <div style="margin-top:20px; padding:10px; border-top:1px dashed #333; color:#777; font-size:12px;">
+                <p><i class="fas fa-info-circle"></i> ملاحظة: تأكد من مراجعة الـ Console عند تحديث حالة اللاعبين لمتابعة التنفيذ.</p>
+            </div>
+        </div>
+    `;
+
+    // تحديث محتوى الصفحة الرئيسي
+    document.getElementById('main-content').innerHTML = adminHtml;
+
+    // تحديث شكل أزرار القائمة الجانبية
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    const adminBtn = document.getElementById('admin-gate');
+    if(adminBtn) adminBtn.classList.add('active');
+},
+
     screen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen')); document.getElementById(id).classList.add('active-screen'); },
     page(id, el) {
         document.querySelectorAll('.page-content').forEach(p => p.style.display = 'none');
@@ -1121,6 +1279,38 @@ const UI = {
             box.innerHTML = "<p style='color:#666;'>لقد أنهيت جميع مبارياتك في الدوري!</p>";
         }
     },
+        findBestSub(injuredPos, squad, currentLineup) {
+            const posMap = {
+                'GK': ['GK'], 'CB': ['CB', 'RB', 'LB'], 'RB': ['RB', 'CB', 'RWB'],
+                'LB': ['LB', 'CB', 'LWB'], 'CM': ['CM', 'CDM', 'CAM'],
+                'RW': ['RW', 'RM', 'ST'], 'LW': ['LW', 'LM', 'ST'], 'ST': ['ST', 'RW', 'LW']
+            };
+            const targetRoles = posMap[injuredPos] || [];
+            const bench = squad.filter(p => !Object.values(currentLineup).includes(p.name) && (p.inj || 0) === 0 && (p.susp || 0) === 0);
+            for (let role of targetRoles) {
+                const match = bench.find(p => p.pos === role);
+                if (match) return match;
+            }
+            return bench[0] || null;
+        },
+
+        autoSubstitute(teamData) {
+            const lineup = teamData.lineup || {};
+            const squad = Array.isArray(teamData.squad) ? teamData.squad : Object.values(teamData.squad || {});
+            if (!teamData.subsPerformed) teamData.subsPerformed = [];
+            
+            for (let pos in lineup) {
+                const playerName = lineup[pos];
+                const player = squad.find(p => p.name === playerName);
+                if (player && (player.inj || 0) > 0) {
+                    const sub = this.findBestSub(player.pos, squad, lineup);
+                    if (sub) {
+                        lineup[pos] = sub.name;
+                        teamData.subsPerformed.push({ playerOut: playerName, playerIn: sub.name, reason: 'إصابة' });
+                    }
+                }
+            }
+        },
 
     renderOffers(offers) {
         const box = document.getElementById('offers-box');
@@ -1664,6 +1854,49 @@ runFriendly(opp) {
     }
 };
 const Admin = {
+    // تأكد أن هذه الدالة داخل كائن Admin
+    resetSeason: async function() {
+        // تأكيد قبل الحذف
+        if (!confirm("هل أنت متأكد؟ سيتم تصفير الموسم ومسح الفرق المحجوزة وإتاحة اختيار الفرق من جديد.")) return;
+
+        try {
+            const snap = await db.ref('users').once('value');
+            const users = snap.val();
+            
+            if (!users) {
+                alert("لا يوجد مستخدمين لحذف بياناتهم!");
+                return;
+            }
+
+            let updates = {};
+
+            // 1. مسح بيانات المدربين مع الحفاظ على الحسابات الأساسية
+            for (let userId in users) {
+                updates[`/users/${userId}/budget`] = 100000000;   
+                updates[`/users/${userId}/LastFriendlyWeek`] = null; 
+                updates[`/users/${userId}/team`] = "بدون فريق";
+                updates[`/users/${userId}/LastTrainDay`] = null; 
+                updates[`/users/${userId}/ReceivedOffers`] = null; 
+                updates[`/users/${userId}/Specialists`] = null; 
+                updates[`/users/${userId}/tactics`] = null; 
+                updates[`/users/${userId}/squad`] = null; 
+                updates[`/users/${userId}/lineup`] = null; 
+            }
+
+            // 2. مسح الفرق المحجوزة لفتح المجال لاختيار فرق جديدة
+            updates[`/taken_teams`] = null; 
+
+            // تنفيذ كل التحديثات في خطوة واحدة
+            await db.ref().update(updates);
+            
+            alert("تم تصفير الموسم بنجاح! تم فتح اختيار الفرق لجميع المدربين.");
+            location.reload(); 
+        } catch (error) {
+            console.error("Error resetting season:", error);
+            alert("حدث خطأ أثناء تصفير الموسم.");
+        }
+    }, // <-- الفاصلة هنا مهمة جداً إذا كان هناك دالة بعدها
+
     // دالة تحديث حالة اللاعبين (خصم جولة من الإصابة/الإيقاف)
     updateTeamStatus: async function(userName) {
         if(!userName) return;
@@ -1724,15 +1957,23 @@ Admin.updateAllLeaguesStatus = async function() {
         }
     });
 };
-        Admin.updateAllPlayersStatus = async function() {
+Admin.updateAllPlayersStatus = async function() {
     const snap = await db.ref('users').once('value');
     const users = snap.val();
+    if(!users) return;
+    const updates = {};
     for(let u in users) {
-        let squad = Array.isArray(users[u].squad) ? users[u].squad : Object.values(users[u].squad || {});
-        squad.forEach(p => { if(p.inj > 0) p.inj--; if(p.susp > 0) p.susp--; });
-        await db.ref(`users/${u}/squad`).set(squad);
+        if(!users[u].squad) continue;
+        let squad = Array.isArray(users[u].squad) ? users[u].squad : Object.values(users[u].squad);
+        let changed = false;
+        squad.forEach(p => { 
+            if(p.inj > 0) { p.inj--; changed = true; }
+            if(p.susp > 0) { p.susp--; changed = true; }
+        });
+        if(changed) updates[`users/${u}/squad`] = squad;
     }
-    console.log("تم تحديث حالة اللاعبين لجميع الفرق");
+    if(Object.keys(updates).length > 0) await db.ref().update(updates);
+    console.log("✅ تم تحديث إصابات البشر تلقائياً");
 };
     }
 };
