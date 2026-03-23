@@ -1,7 +1,4 @@
 
-
-
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -394,6 +391,7 @@ const Core = {
         if(u === "مايكل ماهر") document.getElementById('admin-gate').style.display = "flex";
         
         const snap = await db.ref('users/'+u).once('value');
+                if(snap.exists() && snap.val().password !== p) return alert("كلمة السر خطأ!");
         if(!snap.exists()) {
             await db.ref('users/'+u).set({ 
                 username: u, password: p, team: "", budget: 100000000, lineup: {}, formation: "433", 
@@ -655,7 +653,7 @@ const Engine = {
                 let pName = activeOnPitch[Math.floor(Math.random() * activeOnPitch.length)];
 
                 if (pName) {
-                    let duration = Math.floor(Math.random() * 3) + 1;
+                    let duration = Math.floor(Math.random() * 3) + 2;
                     let sideData = side === 'h' ? dataH : dataA;
                     let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
                     let pIdx = sQ.findIndex(px => px.n === pName);
@@ -672,35 +670,51 @@ const Engine = {
                 }
             }
 
-            // حدث الكروت
-            let hRisk = (dataH.tactics?.press === 'aggr' ? 0.04 : 0.015);
-            if (Math.random() < hRisk) {
-                let side = (Math.random() > 0.5 ? 'h' : 'a');
-                let sideLineup = (side === 'h' ? lineupH : lineupA);
-                let activePlayers = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
-                let pName = activePlayers[Math.floor(Math.random() * activePlayers.length)];
-                
-                if(pName) {
-                    let hasYellow = matchEvents.find(e => e.player === pName && e.type === 'yellow' && e.team === side);
-                    let isRed = (Math.random() < 0.05 || hasYellow); 
-                    
-                    if (isRed) {
-                        ejectedPlayers[side].push(pName);
-                        ratings[side][pName] -= 2.5; // خصم كبير بسبب الطرد
-                        if(!isAuto) UI.addSimLog(`🟥 طرد! [${pName}]`, 'red');
-                        matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
-                        if (!isFriendly) {
-                            let sideData = (side === 'h' ? dataH : dataA);
-                            let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
-                            let pIdx = sQ.findIndex(px => px.n === pName);
-                            if(pIdx !== -1) sQ[pIdx].susp = 1;
-                        }
+// --- [كود الكروت المطور ليرسل لفايربيس] ---
+let hRisk = (dataH.tactics?.press === 'aggr' ? 0.04 : 0.015);
+if (Math.random() < hRisk) {
+    let side = (Math.random() > 0.5 ? 'h' : 'a');
+    let sideLineup = (side === 'h' ? lineupH : lineupA);
+    let activePlayers = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
+    let pName = activePlayers[Math.floor(Math.random() * activePlayers.length)];
+    
+    if(pName) {
+        let hasYellow = matchEvents.find(e => e.player === pName && e.type === 'yellow' && e.team === side);
+        let isRed = (Math.random() < 0.05 || hasYellow); 
+        
+        if (isRed) {
+            ejectedPlayers[side].push(pName);
+            ratings[side][pName] -= 2.5;
+            if(!isAuto) UI.addSimLog(`🟥 طرد! [${pName}]`, 'red');
+            matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
+
+            if (!isFriendly) {
+                let sideData = (side === 'h' ? dataH : dataA);
+                let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
+                let pIdx = sQ.findIndex(px => px.n === pName);
+
+                if(pIdx !== -1) {
+                    sQ[pIdx].susp = 2; // إيقاف لجولة واحدة
+
+                    // --- [الإرسال لفايربيس] ---
+                    if (sideData.uid) {
+                        // تحديث للمستخدم الحقيقي
+                        db.ref(`users/${sideData.uid}/squad/${pIdx}/susp`).set(2);
                     } else {
-                        ratings[side][pName] -= 0.5; // خصم بسيط للإنذار
-                        if(!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
-                        matchEvents.push({ time: m, player: pName, type: 'yellow', team: side, text: 'إنذار' });
+                        // تحديث لفريق الكمبيوتر (CPU)
+                        let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
+                        if(tIdx !== -1) db.ref(`league_data/${tIdx}/players/${pIdx}/susp`).set(2);
                     }
                 }
+            }
+        } else {
+            // الإنذار الأصفر لا يسجل في قاعدة البيانات (تأثيره لحظي فقط)
+            ratings[side][pName] -= 0.5;
+            if(!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
+            matchEvents.push({ time: m, player: pName, type: 'yellow', team: side, text: 'إنذار' });
+        }
+    }
+
                             // منطق التمريرات والتسلل (يحدث كل دقيقة تقريباً)
             let activeSide = Math.random() > stats.a.possession/100 ? 'h' : 'a';
             stats[activeSide].passes += Math.floor(Math.random() * 7) + 3;
@@ -1006,15 +1020,30 @@ await Admin.updateTeamStatus(dataA.username);
     },
 
     async updateTable(h, a, sh, sa) {
-        const up = async (n, pts, w, d, l, gf, ga) => {
-            await db.ref('league_table/'+n).transaction(s => {
-                s = s || {p:0, w:0, d:0, l:0, gf:0, ga:0, pts:0};
-                return { p:s.p+1, w:s.w+w, d:s.d+d, l:s.l+l, gf:s.gf+gf, ga:s.ga+ga, pts:s.pts+pts };
-                
-  
-          });
-                      // تحديث إحصائيات المدرب الدائمة (الترتيب العالمي)
-            await db.ref('users/' + n + '/stats').transaction(st => {
+    const up = async (teamName, pts, w, d, l, gf, ga) => {
+        // 1. تحديث جدول الدوري (league_table) - شغال تمام
+        await db.ref('league_table/' + teamName).transaction(s => {
+            s = s || {p:0, w:0, d:0, l:0, gf:0, ga:0, pts:0};
+            return { 
+                p: (s.p || 0) + 1, 
+                w: (s.w || 0) + w, 
+                d: (s.d || 0) + d, 
+                l: (s.l || 0) + l, 
+                gf: (s.gf || 0) + gf, 
+                ga: (s.ga || 0) + ga, 
+                pts: (s.pts || 0) + pts 
+            };
+        });
+
+        // 2. تحديث إحصائيات المدرب (Stats) - التعديل هنا
+        // البحث عن المستخدم الذي يمتلك هذا الفريق
+        const userSnap = await db.ref('users').orderByChild('team').equalTo(teamName).once('value');
+        
+        if (userSnap.exists()) {
+            const userData = userSnap.val();
+            const uid = Object.keys(userData)[0]; // جلب الـ UID الحقيقي للمستخدم
+
+            await db.ref(`users/${uid}/stats`).transaction(st => {
                 st = st || { pts: 0, w: 0, d: 0, l: 0 };
                 return {
                     pts: (st.pts || 0) + pts,
@@ -1023,12 +1052,25 @@ await Admin.updateTeamStatus(dataA.username);
                     l: (st.l || 0) + l
                 };
             });
+            console.log(`✅ تم تحديث إحصائيات المدرب لفريق ${teamName}`);
+        } else {
+            console.log(`ℹ️ فريق ${teamName} يتبع الكمبيوتر، لا يوجد stats لتحديثها.`);
+        }
+    };
 
-        };
-        if(sh > sa) { await up(h,3,1,0,0,sh,sa); await up(a,0,0,0,1,sa,sh); }
-        else if(sa > sh) { await up(a,3,1,0,0,sa,sh); await up(h,0,0,0,1,sh,sa); }
-        else { await up(h,1,0,1,0,sh,sa); await up(a,1,0,1,0,sa,sh); }
-    },
+    // توزيع النقاط حسب النتيجة
+    if(sh > sa) { 
+        await up(h, 3, 1, 0, 0, sh, sa); 
+        await up(a, 0, 0, 0, 1, sa, sh); 
+    } else if(sa > sh) { 
+        await up(a, 3, 1, 0, 0, sa, sh); 
+        await up(h, 0, 0, 0, 1, sh, sa); 
+    } else { 
+        await up(h, 1, 0, 1, 0, sh, sa); 
+        await up(a, 1, 0, 1, 0, sa, sh); 
+    }
+}, 
+
 
     async postPress() {
         const msg = document.getElementById('press-input').value;
@@ -1125,27 +1167,46 @@ const AutoEngine = {
                         await db.ref(`schedule/${week}/matches/${i}`).update({ done: true, running: null });
                     }
                 }
-                                // --- بداية تعديل خصم الإصابات ---
-                let currentMatches = (await db.ref(`schedule/${week}/matches`).once('value')).val() || [];
+                // --- بداية تعديل خصم الإصابات والإيقافات الشامل ---
+                let currentMatchesSnap = await db.ref(`schedule/${week}/matches`).once('value');
+                let currentMatches = currentMatchesSnap.val() || [];
                 let isRoundFinished = currentMatches.every(m => m.done || m.h === "استراحة" || m.a === "استراحة");
 
                 if (isRoundFinished && !weekData.injUpdated) {
-                    const snap = await db.ref('league_data').once('value');
-                    const leagues = snap.val();
+                    const updates = {};
+                    
+                    // 1. تحديث فرق الكمبيوتر (league_data)
+                    const leagueSnap = await db.ref('league_data').once('value');
+                    const leagues = leagueSnap.val();
                     if (leagues) {
-                        for (let tIdx = 0; tIdx < leagues.length; tIdx++) {
-                            if (leagues[tIdx].players) {
-                                leagues[tIdx].players.forEach((p, pIdx) => {
-                                    if (p.inj && p.inj > 0) {
-                                        db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ inj: p.inj - 1 });
-                                    }
+                        leagues.forEach((team, tIdx) => {
+                            if (team.players) {
+                                team.players.forEach((p, pIdx) => {
+                                    if (p.inj > 0) updates[`league_data/${tIdx}/players/${pIdx}/inj`] = p.inj - 1;
+                                    if (p.susp > 0) updates[`league_data/${tIdx}/players/${pIdx}/susp`] = p.susp - 1;
                                 });
                             }
+                        });
+                    }
+
+                    // 2. تحديث فرق المدربين (users)
+                    const usersSnap = await db.ref('users').once('value');
+                    const users = usersSnap.val();
+                    if (users) {
+                        for (let uid in users) {
+                            let squad = Array.isArray(users[uid].squad) ? users[uid].squad : Object.values(users[uid].squad || {});
+                            squad.forEach((p, pIdx) => {
+                                if (p.inj > 0) updates[`users/${uid}/squad/${pIdx}/inj`] = p.inj - 1;
+                                if (p.susp > 0) updates[`users/${uid}/squad/${pIdx}/susp`] = p.susp - 1;
+                            });
                         }
                     }
-                    await db.ref(`schedule/${week}`).update({ injUpdated: true });
+
+                    updates[`schedule/${week}/injUpdated`] = true;
+                    await db.ref().update(updates);
                 }
                 // --- نهاية التعديل ---
+
 
             }
         }
@@ -2341,4 +2402,5 @@ setInterval(() => { AutoEngine.checkAndRun(); }, 60000);
 </script>
 </body>
 </html>
+
 
