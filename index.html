@@ -120,6 +120,16 @@
     </div>
 </div>
 
+<div id="scr-welcome" class="screen" style="align-items:center; justify-content:center; background:#000;">
+    <div class="login-card" style="border-color: var(--blue);">
+        <i class="fas fa-hand-sparkles" style="font-size:50px; color:var(--blue); margin-bottom:20px;"></i>
+        <h2 id="welcome-msg" style="color:#fff; margin-bottom:20px;">أهلاً بك أيها القائد</h2>
+        <p style="color:#888; margin-bottom:30px;">اضغط على الزر أدناه لتجهيز غرفة الملابس واختيار فريقك</p>
+        <button class="btn-gold" onclick="UI.goToPicker()" style="background:var(--blue); color:#000;">
+            دخول سوق المدربين <i class="fas fa-arrow-left"></i>
+        </button>
+    </div>
+</div>
 
 
 <div id="scr-picker" class="screen" style="align-items:center; justify-content:center;">
@@ -474,95 +484,77 @@ const Core = {
     refresh() {
     if (!APP_STATE.user) return;
 
-    // الشرط: لو الحقل فاضي أو مكتوب فيه "بدون فريق"
     if (APP_STATE.user.team === "" || APP_STATE.user.team === "بدون فريق") {
-        UI.screen('scr-picker');
-        UI.renderPicker();
-
-        const sel = document.getElementById('train-player-select');
-        if (sel && APP_STATE.user.squad) {
-            const sq = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
-            sel.innerHTML = sq.map(p => `<option value="${p.n}">${p.n} (قوة: ${p.p})</option>`).join('');
-        }
+        // بدل ما نفتح الاختيار علطول، نفتح شاشة الترحيب "الإجبارية"
+        UI.screen('scr-welcome'); 
+        document.getElementById('welcome-msg').innerText = `أهلاً يا كوتش ${ME}`;
     } else {
         UI.screen('scr-main');
         UI.renderDashboard();
     }
-},
+}, 
+
 
 async pickTeam(name) {
-    // التحقق من الحجز
-    if (APP_STATE.taken[name]) return alert("هذا الفريق محجوز!");
+    if (this.isProcessing) return;
+    this.isProcessing = true;
 
-    const teamData = APP_STATE.league.find(t => t.name === name);
-    if (!teamData) return;
+    try {
+        const teamData = APP_STATE.league.find(t => t.name === name);
+        if (!teamData || !teamData.players) throw new Error("بيانات الفريق أو اللاعبين ناقصة");
 
-    // 1. تنظيف مصفوفة اللاعبين وجلب المراكز (pos) لضمان انتقالها
-    const cleanSquad = teamData.players.map(p => ({
-        n: p.n,
-        p: p.p,
-        pos: p.pos || p.Pos || "---", // جلب المركز بأي صيغة متاحة
-        inj: p.inj || 0,
-        susp: p.susp || 0
-    }));
+        // 1. تجهيز السكواد (النسخة الآمنة)
+        const cleanSquad = teamData.players.filter(p => p && p.n).map(p => ({
+            n: p.n,
+            p: parseInt(p.p) || 50,
+            pos: p.pos || p.Pos || "---",
+            inj: (p.inj !== undefined) ? parseInt(p.inj) : 0,
+            susp: (p.susp !== undefined) ? parseInt(p.susp) : 0
+        }));
 
-// --- 1. ترتيب اللاعبين الجاهزين (مش مصابين ولا موقوفين) ---
-let sortedForLineup = [...cleanSquad]
-    .filter(p => (p.inj || 0) === 0 && (p.susp || 0) === 0)
-    .sort((a, b) => (parseInt(b.p) || 0) - (parseInt(a.p) || 0));
+        // 2. ترتيب الجاهزين للتشكيلة
+        let sorted = [...cleanSquad]
+            .filter(p => p.inj <= 0 && p.susp <= 0)
+            .sort((a, b) => b.p - a.p);
 
-// --- 2. دالة السحب الذكي مع نظام "الناشئ" التلقائي ---
-const pickBest = (posList) => {
-    // أ- البحث عن أقوى لاعب متاح في المركز المطلوب
-    // أ- البحث عن أقوى لاعب متاح في المركز المطلوب (بشرط ميكونش مصاب)
-const foundIdx = sortedForLineup.findIndex(p => 
-    posList.includes(p.pos.toUpperCase()) && (p.inj || 0) <= 0
-);
+        const pick = (list) => {
+            const idx = sorted.findIndex(p => list.includes(p.pos.toUpperCase()));
+            if (idx !== -1) return sorted.splice(idx, 1)[0].n;
+            const yName = "ناشئ " + (cleanSquad.filter(x => x.n.startsWith("ناشئ")).length + 1);
+            if (!cleanSquad.find(x => x.n === yName)) cleanSquad.push({ n: yName, p: 50, pos: "ALL", inj: 0, susp: 0 });
+            return yName;
+        };
 
-    // ج- لو السكواد خلص خالص، بنخترع "ناشئين" بالترتيب (1-11)
-    // بنعد الناشئين اللي في السكواد حالياً عشان نطلع الرقم اللي عليه الدور
-    const youthCount = cleanSquad.filter(x => x.n.startsWith("ناشئ")).length;
-    const youthName = "ناشئ " + (youthCount + 1);
+        const lineup = {
+            0: pick(["GK"]), 1: pick(["CB", "DF"]), 2: pick(["CB", "DF"]),
+            3: pick(["LB", "RB", "DF"]), 4: pick(["LB", "RB", "DF"]),
+            5: pick(["CM", "CDM", "MF"]), 6: pick(["CM", "CDM", "MF"]),
+            7: pick(["LM", "RM", "MF"]), 8: pick(["CAM", "MF"]),
+            9: pick(["ST", "FW"]), 10: pick(["ST", "RW", "LW", "FW"])
+        };
 
-    // نضمن إن الناشئ مضاف للسكواد عشان الماتش إنجن يشوف قوته (50)
-    if (!cleanSquad.find(x => x.n === youthName)) {
-        cleanSquad.push({ n: youthName, p: 50, pos: "ALL", inj: 0, susp: 0 });
+        // 3. التحديث في قاعدة البيانات
+        const ref = firebase.database().ref();
+        await ref.child('taken_teams/' + name).set(ME);
+        await ref.child('users/' + ME).update({
+            team: name,
+            squad: cleanSquad,
+            lineup: lineup,
+            tactics: { style: "متوازن", pressure: 50, mentality: "هجومي" },
+            budget: 100000000
+        });
+        await ref.child('league_table/' + name).set({ p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 });
+
+        window.location.reload();
+
+    } catch (error) {
+        console.error(error);
+        this.isProcessing = false;
+        alert("تنبيه: " + error.message);
     }
-    return youthName;
-};
-
-
-// --- 3. بناء التشكيلة الكاملة (11 لاعب) بدون أي مكان فاضي ---
-const defaultLineup = {
-    0: pickBest(["GK"]),                  // حارس
-    1: pickBest(["CB", "DF"]),            // قلب دفاع 1
-    2: pickBest(["CB", "DF"]),            // قلب دفاع 2
-    3: pickBest(["LB", "RB", "DF"]),      // ظهير 1
-    4: pickBest(["LB", "RB", "DF"]),      // ظهير 2
-    5: pickBest(["CM", "CDM", "MF"]),     // وسط 1
-    6: pickBest(["CM", "CDM", "MF"]),     // وسط 2
-    7: pickBest(["LM", "RM", "MF"]),      // جناح/وسط 1
-    8: pickBest(["CAM", "MF"]),           // وسط هجومي
-    9: pickBest(["ST", "FW"]),            // هجوم 1
-    10: pickBest(["ST", "RW", "LW", "FW"]) // هجوم 2
-};
-
-
-    // 3. التحديث الشامل في قاعدة البيانات (دمج كل الحقول المطلوبة)
-    await db.ref('users/' + ME).update({
-        team: name,
-        squad: cleanSquad,
-        lineup: defaultLineup, // إضافة التشكيلة
-        tactics: { style: "متوازن", pressure: 50, mentality: "هجومي" } // إضافة تكتيكات افتراضية
-    });
-
-    // تحديث الجداول والفرق المحجوزة
-    await db.ref('taken_teams/' + name).set(ME);
-    await db.ref('league_table/' + name).transaction(c => c || { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 });
-
-    // إعادة تحميل الصفحة لتطبيق التغييرات
-    location.reload();
 }
+
+
 
     
 };
@@ -1827,6 +1819,13 @@ showAdmin() {
     },
 
 
+goToPicker() {
+    // 1. تشغيل أي صوت أو انيميشن هنا بيخلي المتصفح "يفوق"
+    // 2. الانتقال لشاشة الاختيار
+    UI.screen('scr-picker');
+    UI.renderPicker();
+    console.log("Picker is now active and focused!");
+}, 
 
 
     renderTransfers() {
@@ -2495,5 +2494,6 @@ setInterval(() => { AutoEngine.checkAndRun(); }, 60000);
 </script>
 </body>
 </html>
+
 
 
