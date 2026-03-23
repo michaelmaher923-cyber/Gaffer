@@ -8,6 +8,7 @@
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
@@ -106,13 +107,20 @@
 <div id="scr-login" class="screen active-screen">
     <div class="login-card">
         <h1 style="font-family:'Orbitron'; color:var(--gold); font-size: 35px;">GAFFER</h1>
-        <p style="color:#666; margin-bottom: 30px;">BY MICHAEL MAHER</p>
-                <p style="color:#666; margin-bottom: 18px;">كن سيد المدربين</p>
-        <input type="text" id="in-user" placeholder="اسم المدرب">
-        <input type="password" id="in-pass" placeholder="كلمة السر">
-        <button class="btn-gold" onclick="Core.login()">دخول القائد</button>
+        <p style="color:#666; margin-bottom: 10px;">BY MICHAEL MAHER</p>
+        <p style="color:var(--gold); margin-bottom: 30px; font-weight: bold;">سجل دخولك عبر جوجل للبدء</p>
+        
+        <input type="text" id="in-user" placeholder="اكتب اسمك التدريبي هنا">
+        
+        <button class="btn-gold" onclick="Core.login()">
+            <i class="fab fa-google"></i> دخول القائد بواسطة جوجل
+        </button>
+        
+        <p id="login-status" style="margin-top: 15px; color: #888; font-size: 13px;"></p>
     </div>
 </div>
+
+
 
 <div id="scr-picker" class="screen" style="align-items:center; justify-content:center;">
     <h2 style="color:var(--gold); font-size: 30px; margin-bottom: 30px;">اختر قيادة فريقك</h2>
@@ -351,18 +359,14 @@
 </div>
 
 <script>
-const getDeviceId = () => {
-    let deviceId = localStorage.getItem('unique_device_id');
-    if (!deviceId) {
-        deviceId = 'dev-' + Math.random().toString(36).substring(2, 15) + Date.now();
-        localStorage.setItem('unique_device_id', deviceId);
-    }
-    return deviceId;
-};
-
 const firebaseConfig = { 
     apiKey: "AIzaSyDhh0xovPTP1WelHbxa4YqwSRIW7ZoBS_Y", 
-    databaseURL: "https://accountant-5a22d-default-rtdb.firebaseio.com" 
+    authDomain: "accountant-5a22d.firebaseapp.com",
+    databaseURL: "https://accountant-5a22d-default-rtdb.firebaseio.com",
+    projectId: "accountant-5a22d",
+    storageBucket: "accountant-5a22d.appspot.com",
+    messagingSenderId: "1087474472851",
+    appId: "1:1087474472851:web:654b321a0d9e87fc"
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
@@ -392,42 +396,66 @@ const FORMATIONS = {
     "424": [{t:90,l:50},{t:75,l:20},{t:75,l:40},{t:75,l:60},{t:75,l:80},{t:50,l:40},{t:50,l:60},{t:15,l:15},{t:10,l:40},{t:10,l:60},{t:15,l:85}]
 };
 const Core = {
-        async login() {
-        const u = document.getElementById('in-user').value.trim();
-        const p = document.getElementById('in-pass').value;
-        if(!u || !p) return alert("أدخل البيانات");
+            async login() {
+        const coachName = document.getElementById('in-user').value.trim();
+        const status = document.getElementById('login-status');
         
-        const deviceId = getDeviceId(); // جلب معرف الجهاز
-        ME = u;
-        if(u === "مايكل ماهر") document.getElementById('admin-gate').style.display = "flex";
-        
-        const snap = await db.ref('users/'+u).once('value');
-        if(snap.exists() && snap.val().password !== p) return alert("كلمة السر خطأ!");
+        if (!coachName) {
+            alert("⚠️ اكتب اسم المدرب الأول");
+            return;
+        }
 
-        // --- نظام حماية الحسابات المتعددة ---
-        const allUsersSnap = await db.ref('users').once('value');
-        const allUsers = allUsersSnap.val() || {};
-        
-        // التأكد إذا كان الجهاز مرتبط بحساب آخر
-        for (let id in allUsers) {
-            if (allUsers[id].deviceId === deviceId && id !== u) {
-                return alert("⚠️ خطأ: هذا الجهاز مرتبط بحساب مدرب آخر. لا يسمح بتعدد الحسابات!");
+        // إظهار رسالة للمستخدم إنه جاري التحميل
+        if(status) status.innerText = "⏳ جاري فتح نافذة جوجل...";
+
+        const provider = new firebase.auth.GoogleAuthProvider();
+
+        try {
+            // السطر ده هو اللي "بيشغل" الزرار فعلياً
+            const result = await firebase.auth().signInWithPopup(provider);
+            const user = result.user;
+            const uid = user.uid;
+
+            console.log("Logged in user:", user.displayName);
+
+            const uidSnap = await db.ref('uids/' + uid).once('value');
+            if (uidSnap.exists()) {
+                ME = uidSnap.val().username;
+            } else {
+                ME = coachName;
+                await db.ref('uids/' + uid).set({ username: coachName });
+                
+                const userSnap = await db.ref('users/' + coachName).once('value');
+                if (!userSnap.exists()) {
+                    await db.ref('users/' + coachName).set({
+                        username: coachName,
+                        uid: uid,
+                        email: user.email,
+                        team: "",
+                        budget: 100000000,
+                        lineup: {},
+                        formation: "433",
+                        tactics: { style: 'normal' },
+                        stats: { w: 0, d: 0, l: 0, pts: 0, p: 0 }
+                    });
+                }
             }
-        }
 
-        if(!snap.exists()) {
-            await db.ref('users/'+u).set({ 
-                username: u, password: p, team: "", budget: 100000000, lineup: {}, formation: "433", 
-                tactics: { style: 'normal' }, stats: {w:0,d:0,l:0,pts:0,p:0},
-                deviceId: deviceId // ربط الجهاز عند الإنشاء
-            });
-        } else {
-            // تحديث معرف الجهاز للحساب القديم لو لم يكن موجوداً
-            if(!snap.val().deviceId) await db.ref('users/'+u).update({ deviceId: deviceId });
+            if (ME === "مايكل ماهر") {
+                const adminGate = document.getElementById('admin-gate');
+                if(adminGate) adminGate.style.display = "flex";
+            }
+
+            this.startSync();
+
+        } catch (error) {
+            console.error("Auth Error:", error);
+            if(status) status.innerText = "❌ خطأ: " + error.message;
+            // لو ظهر خطأ auth/operation-not-allowed يبقى لازم تفعل جوجل من الكونسول
+            alert("حدث خطأ: " + error.message);
         }
-        
-        this.startSync();
     },
+
 
 
     startSync() {
