@@ -1,3 +1,11 @@
+Gmail	Michael Maher ‏ <michaelmaher923@gmail.com>
+(بدون موضوع)
+Michael Maher ‏ <michaelmaher923@gmail.com>	22 مارس 2026 في 10:30 م
+إلى: maherfakhry47@yahoo.com
+
+
+
+
 
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -598,7 +606,43 @@ const Engine = {
         const snapA = await db.ref('users').orderByChild('team').equalTo(aName).once('value');
         const dataH = Object.values(snapH.val() || {})[0] || this.getCPUTeam(hName);
         const dataA = Object.values(snapA.val() || {})[0] || this.getCPUTeam(aName);
-        
+        // --- 1. تنظيف التشكيلة (طرد المصاب والموقوف) ---
+        [dataH, dataA].forEach(team => {
+            let lineup = team.lineup || {};
+            let squad = Array.isArray(team.squad) ? team.squad : Object.values(team.squad || {});
+            
+            // تحديد الخانات الفاضية بعد الطرد
+            Object.keys(lineup).forEach(slot => {
+                let pName = lineup[slot];
+                let pData = squad.find(p => p.n === pName);
+                if (pData && (pData.susp > 0 || pData.inj > 0)) {
+                    delete lineup[slot]; // الخانة أصبحت متاحة للتعويض
+                }
+            });
+
+            // --- 2. البحث عن أي لاعب "خارج التشكيلة" وجاهز بدلاً من الفراغات ---
+            let currentPlayersInLineup = Object.values(lineup);
+            
+            // فلترة اللاعبين المتاحين (مش في التشكيلة + مش مصاب + مش موقوف)
+            let availableSubstitutes = squad.filter(p => 
+                !currentPlayersInLineup.includes(p.n) && 
+                (p.susp || 0) === 0 && 
+                (p.inj || 0) === 0
+            );
+
+            // ملء الخانات الفاضية (من المركز 0 لـ 10)
+            for (let i = 0; i < 11; i++) {
+                if (!lineup[i] && availableSubstitutes.length > 0) {
+                    // سحب أول لاعب متاح ووضعه في الخانة الفاضية
+                    let newPlayer = availableSubstitutes.shift();
+                    lineup[i] = newPlayer.n;
+                    console.log(`♻️ تعويض تلقائي: ${newPlayer.n} دخل بدلاً من لاعب غائب في فريق ${team.team || team.username}`);
+                }
+            }
+        });
+
+
+ 
         if(!isAuto) UI.renderSimLineups(dataH, dataA);
         
         const pH = this.calculatePower(dataH);
