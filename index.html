@@ -653,10 +653,23 @@ const Engine = {
         if(!isAuto) UI.showSimOverlay(hName, aName);
         this.simSpeed = isAuto ? 0 : 2500; 
         let matchEvents = [];
+        // --- تعديل ذكي لمسح الأسماء الغريبة وتثبيت اسم المدرب ---
         const snapH = await db.ref('users').orderByChild('team').equalTo(hName).once('value');
         const snapA = await db.ref('users').orderByChild('team').equalTo(aName).once('value');
-        const dataH = Object.values(snapH.val() || {})[0] || this.getCPUTeam(hName);
-        const dataA = Object.values(snapA.val() || {})[0] || this.getCPUTeam(aName);
+        const rawH = snapH.val() || {};
+        const rawA = snapA.val() || {};
+
+        // مسك المفاتيح (الأهالي) اللي هي أسماء المدربين (مثلاً مايكل ماهر)
+        const hKey = Object.keys(rawH)[0]; 
+        const aKey = Object.keys(rawA)[0];
+
+        const dataH = rawH[hKey] || this.getCPUTeam(hName);
+        const dataA = rawA[aKey] || this.getCPUTeam(aName);
+
+        // ربط البيانات بالمفتاح عشان التحديث يتم في نفس المكان
+        if (hKey) dataH.uid = hKey; 
+        if (aKey) dataA.uid = aKey;
+        // ------------------------------------------------------
         // --- 1. تنظيف التشكيلة (طرد المصاب والموقوف) ---
         [dataH, dataA].forEach(team => {
             let lineup = team.lineup || {};
@@ -754,11 +767,15 @@ const Engine = {
                     let pIdx = sQ.findIndex(px => px.n === pName);
                     if (pIdx !== -1) { 
                         sQ[pIdx].inj = duration; 
-                        if (!sideData.username) {
-                            db.ref(`league_data/${APP_STATE.league.findIndex(t => t.name === sideData.team)}/players/${pIdx}`).update({ inj: duration });
+                        // تسجيل الإصابة للمدرب الحقيقي أو الكمبيوتر بشكل سليم
+                        if (sideData.uid) {
+                            db.ref(`users/${sideData.uid}/squad`).set(sQ);
+                        } else {
+                            let tIdx = APP_STATE.league.findIndex(t => t.name === sideData.team);
+                            if(tIdx !== -1) db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ inj: duration });
                         }
                     }
-                    if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
+                    if(!isAuto) UI.addSimLog(`?? إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
                     ejectedPlayers[side].push(pName);
                     ratings[side][pName] -= 1.0; // خصم من التقييم بسبب الخروج المبكر
                     matchEvents.push({ time: m, player: pName, type: 'injury', team: side, text: 'إصابة' });
@@ -792,10 +809,11 @@ if (Math.random() < hRisk) {
                     sQ[pIdx].susp = 2; // إيقاف لجولة واحدة
 
                     // --- [الإرسال لفايربيس] ---
-                    if (sideData.uid) {
-                        // تحديث للمستخدم الحقيقي
-                        db.ref(`users/${sideData.uid}/squad/${pIdx}/susp`).set(2);
-                    } else {
+                                        if (sideData.uid) {
+                        // تحديث السكواد بالكامل لمنع ظهور الأرقام الغريبة (0, 4, 9)
+                        db.ref(`users/${sideData.uid}/squad`).set(sQ);
+                    }
+ else {
                         // تحديث لفريق الكمبيوتر (CPU)
                         let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
                         if(tIdx !== -1) db.ref(`league_data/${tIdx}/players/${pIdx}/susp`).set(2);
@@ -870,10 +888,11 @@ if (!isFriendly && scorer) {
     let pIdx = sQ.findIndex(px => px.n === scorer);
     if (pIdx !== -1) {
         sQ[pIdx].goals = (sQ[pIdx].goals || 0) + 1; // زيادة هدف
-        // تحديث في الفايربيز (للمستخدمين)
+        // تحديث السكواد بالكامل لضمان الترتيب ونظافة البيانات
         if (dataH.uid) {
-            db.ref(`users/${dataH.uid}/squad/${pIdx}/goals`).set(sQ[pIdx].goals);
-        } else {
+            db.ref(`users/${dataH.uid}/squad`).set(sQ);
+        }
+ else {
             // تحديث للكمبيوتر
             let tIdx = APP_STATE.league.findIndex(t => t.name === hName);
             if(tIdx !== -1) db.ref(`league_data/${tIdx}/players/${pIdx}/goals`).set(sQ[pIdx].goals);
@@ -895,10 +914,11 @@ let scorer = this.pickRealisticScorer(lineupA.filter(p => !ejectedPlayers.a.incl
                     let pIdx = sQ.findIndex(px => px.n === scorer);
                     if (pIdx !== -1) {
                         sQ[pIdx].goals = (sQ[pIdx].goals || 0) + 1;
-                        if (dataA.uid) {
-                            // إذا كان المدرب بشرياً
-                            db.ref(`users/${dataA.uid}/squad/${pIdx}/goals`).set(sQ[pIdx].goals);
-                        } else {
+                                                if (dataA.uid) {
+                            // تحديث السكواد بالكامل لمنع تكرار الأسماء أو كسر المصفوفة
+                            db.ref(`users/${dataA.uid}/squad`).set(sQ);
+                        }
+ else {
                             // إذا كان الفريق كمبيوتر
                             let tIdx = APP_STATE.league.findIndex(t => t.name === aName);
                             if(tIdx !== -1) db.ref(`league_data/${tIdx}/players/${pIdx}/goals`).set(sQ[pIdx].goals);
@@ -2553,6 +2573,7 @@ setInterval(() => { AutoEngine.checkAndRun(); }, 60000);
 </script>
 </body>
 </html>
+
 
 
 
