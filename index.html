@@ -1245,16 +1245,14 @@ async redeemDailyCode() {
 const AutoEngine = {
     isProcessing: false, // قفل لمنع تداخل العمليات
         async checkAndRun() {
-    // 1. حماية داخلية للمتصفح لمنع تكرار اللوب في نفس الصفحة
     if (this.isProcessing) return;
     this.isProcessing = true;
 
     try {
-        // جلب وقت السيرفر الموثوق
         const serverTimeSnap = await db.ref('.info/serverTimeOffset').once('value');
         const serverTime = Date.now() + (serverTimeSnap.val() || 0);
-        
-        // جلب نسخة فريش مباشرة من الفايربيز لضمان عدم حدوث تضارب بين المستخدمين
+
+        // جلب نسخة فريش من الجدول بالكامل لضمان الدقة
         const scheduleSnap = await db.ref('schedule').once('value');
         const schedule = scheduleSnap.val();
         if (!schedule) return;
@@ -1264,64 +1262,78 @@ const AutoEngine = {
             if (!weekData.time || serverTime < weekData.time) continue;
 
             let matches = weekData.matches || [];
+            
+            // --- الجزء الأول: محاكاة الماتشات ---
             for (let i = 0; i < matches.length; i++) {
                 let m = matches[i];
-
-                // --- الحماية من التعليق (لو running أكتر من دقيقة) ---
-                if (m.running === true) {
-                    const runTime = m.runTime || 0;
-                    if (serverTime - runTime > 60000) { // 60 ألف مللي ثانية = دقيقة واحدة
-                        console.log(`⚠️ الماتش ${i} علق، جاري إعادة الضبط...`);
-                        await db.ref(`schedule/${week}/matches/${i}`).update({ 
-                            running: false, 
-                            runTime: null 
-                        });
-                        m.running = false; // تحديث النسخة المحلية لمحاكاتها فوراً
-                    } else {
-                        continue; // الماتش لسه شغال (أقل من دقيقة)، سيبه يكمل
-                    }
+                if (m.running && (serverTime - (m.runTime || 0) > 60000)) {
+                    await db.ref(`schedule/${week}/matches/${i}`).update({ running: false });
+                    m.running = false;
                 }
 
-                // --- بدء المحاكاة للأجزاء غير المنتهية ---
                 if (!m.done && m.h !== "استراحة" && m.a !== "استراحة" && !m.running) {
-                    try {
-                        // استخدام transaction لضمان أن مستخدم واحد فقط يمسك الماتش
-                        const lockRef = db.ref(`schedule/${week}/matches/${i}/running`);
-                        const transactionRes = await lockRef.transaction((currentValue) => {
-                            if (currentValue === true) return; // لو حد سبقه، ارفض العملية
-                            return true; // لو متاح، احجزه
-                        });
+                    const lockRef = db.ref(`schedule/${week}/matches/${i}/running`);
+                    const transactionRes = await lockRef.transaction(v => v === true ? undefined : true);
 
-                        if (transactionRes.committed) {
-                            // تم حجز الماتش بنجاح لهذا المستخدم
-                            await db.ref(`schedule/${week}/matches/${i}`).update({ 
-                                runTime: serverTime 
-                            });
-
-                            console.log(`⚽ بدأت محاكاة: ${m.h} vs ${m.a}`);
-                            await Engine.simulate(m.h, m.a, true, false); 
-
-                            // إنهاء الماتش بنجاح
-                            await db.ref(`schedule/${week}/matches/${i}`).update({ 
-                                done: true, 
-                                running: false,
-                                runTime: null 
-                            });
-                        }
-                    } catch (matchError) {
-                        console.error("خطأ في الماتش:", matchError);
-                        // فك القفل في حالة حدوث خطأ مفاجئ
-                        await db.ref(`schedule/${week}/matches/${i}`).update({ running: false });
+                    if (transactionRes.committed) {
+                        await db.ref(`schedule/${week}/matches/${i}`).update({ runTime: serverTime });
+                        await Engine.simulate(m.h, m.a, true, false); 
+                        // ملاحظة: simulate لازم تحدث done:true و running:false في آخرها
                     }
                 }
             }
-            
-            // --- تحديث الإصابات (بعد التأكد من انتهاء الأسبوع) ---
-            // (يُنصح بوضع هذا الجزء في دالة منفصلة يتم استدعاؤها بعد اكتمال الماتشات)
-            // ... كود تحديث الإصابات الحالي بتاعك سليم طالما بيتشيك على injUpdated ...
+
+            // --- الجزء الثاني: تحديث الإصابات (هنا التعديل المطلوب) ---
+            // بنجيب حالة الماتشات "الآن" من الفايربيز للتأكد إن كله قلب Done
+            const freshMatchesSnap = await db.ref(`schedule/${week}/matches`).once('value');
+            const currentMatches = freshMatchesSnap.val() || [];
+
+            // التأكد أن كل الماتشات انتهت (أو استراحة)
+            let isRoundFinished = currentMatches.every(m => 
+                m.done === true || m.h === "استراحة" || m.a === "استراحة"
+            );
+
+            // لو الجولة خلصت والـ injUpdated لسه مش موجودة (false أو undefined)
+            if (isRoundFinished && !weekData.injUpdated) {
+                console.log(`🚀 جولة ${week} اكتملت.. جاري تنفيذ injUpdated...`);
+                const updates = {};
+                
+                // 1. تحديث فرق الكمبيوتر
+                const leagueSnap = await db.ref('league_data').once('value');
+                const leagues = leagueSnap.val();
+                if (leagues) {
+                    leagues.forEach((team, tIdx) => {
+                        if (team.players) {
+                            team.players.forEach((p, pIdx) => {
+                                if (p.inj > 0) updates[`league_data/${tIdx}/players/${pIdx}/inj`] = p.inj - 1;
+                                if (p.susp > 0) updates[`league_data/${tIdx}/players/${pIdx}/susp`] = p.susp - 1;
+                            });
+                        }
+                    });
+                }
+
+                // 2. تحديث فرق المستخدمين
+                const usersSnap = await db.ref('users').once('value');
+                const users = usersSnap.val();
+                if (users) {
+                    for (let uid in users) {
+                        let squad = Array.isArray(users[uid].squad) ? users[uid].squad : Object.values(users[uid].squad || {});
+                        squad.forEach((p, pIdx) => {
+                            if (p.inj > 0) updates[`users/${uid}/squad/${pIdx}/inj`] = p.inj - 1;
+                            if (p.susp > 0) updates[`users/${uid}/squad/${pIdx}/susp`] = p.susp - 1;
+                        });
+                    }
+                }
+
+                // أهم سطر: تسجيل إن التحديث تم لهذه الجولة
+                updates[`schedule/${week}/injUpdated`] = true;
+                
+                await db.ref().update(updates);
+                console.log(`✅ تم تحديث الإصابات وظهرت injUpdated في الجولة ${week}`);
+            }
         }
     } catch (e) {
-        console.error("General Check Error:", e);
+        console.error("CheckAndRun Error:", e);
     } finally {
         this.isProcessing = false;
     }
@@ -1530,76 +1542,101 @@ showAdmin() {
 },
 
     
-    async showLeagueStats() {
-        this.modal("<h4 style='color:var(--gold)'>جاري تجميع بيانات الدوري...</h4>");
-        
-        let allPlayers = [];
-        let absents = [];
+async showLeagueStats() {
+    this.modal("<h4 style='color:var(--gold)'>جاري تجميع بيانات الدوري...</h4>");
+    
+    let allPlayers = [];
+    let absents = [];
 
-        // جلب بيانات المستخدمين والكمبيوتر
-        const [uSnap, cSnap] = await Promise.all([
-            db.ref('users').once('value'),
-            db.ref('league_data').once('value')
-        ]);
-        
-        const users = uSnap.val() || {};
-        const computers = cSnap.val() || [];
+    // جلب بيانات المستخدمين والكمبيوتر
+    const [uSnap, cSnap] = await Promise.all([
+        db.ref('users').once('value'),
+        db.ref('league_data').once('value')
+    ]);
+    
+    const users = uSnap.val() || {};
+    const computers = cSnap.val() || [];
 
-        // تجميع لاعبي البشر
-        Object.keys(users).forEach(uid => {
-            const u = users[uid];
-            const sq = Array.isArray(u.squad) ? u.squad : Object.values(u.squad || {});
-            sq.forEach(p => {
-                let pData = { ...p, team: u.team, owner: u.ME || "مدرب" };
+    // 1. تجميع لاعبي البشر
+    Object.keys(users).forEach(uid => {
+        const u = users[uid];
+        const squadData = u.squad || [];
+        const sq = Array.isArray(squadData) ? squadData : Object.values(squadData);
+        
+        sq.forEach(p => {
+            if (p && p.n) {
+                let pData = { 
+                    ...p, 
+                    team: u.team || "فريق مجهول", 
+                    owner: u.username || "مدرب" 
+                };
                 allPlayers.push(pData);
                 if ((p.inj || 0) > 0 || (p.susp || 0) > 0) absents.push(pData);
-            });
-        });
-
-        // تجميع لاعبي الكمبيوتر
-        computers.forEach(t => {
-            if(t.players) {
-                t.players.forEach(p => {
-                    let pData = { ...p, team: t.name, owner: "الكمبيوتر" };
-                    allPlayers.push(pData);
-                    if ((p.inj || 0) > 0 || (p.susp || 0) > 0) absents.push(pData);
-                });
             }
         });
+    });
 
-        // ترتيب الهدافين (أعلى 10)
-        const topScorers = allPlayers.filter(p => p.goals > 0).sort((a,b) => b.goals - a.goals).slice(0, 10);
+    // 2. تجميع لاعبي الكمبيوتر
+    computers.forEach(t => {
+        if (t && t.players) {
+            const teamName = t.team || t.name || "كمبيوتر";
+            t.players.forEach(p => {
+                if (p && p.n) {
+                    let pData = { 
+                        ...p, 
+                        team: teamName, 
+                        owner: "الذكاء الاصطناعي" 
+                    };
+                    allPlayers.push(pData);
+                    if ((p.inj || 0) > 0 || (p.susp || 0) > 0) absents.push(pData);
+                }
+            });
+        }
+    });
 
-        let h = `
-            <div style="direction:rtl; text-align:right;">
-                <h3 style="color:var(--gold); text-align:center; border-bottom:1px solid #333; padding-bottom:10px;">📊 إحصائيات الدوري العامة</h3>
-                
-                <h5 style="color:#ff4444; margin-top:15px;"><i class="fas fa-user-slash"></i> الغيابات (إصابة / إيقاف)</h5>
-                <div style="max-height:120px; overflow-y:auto; background:#111; padding:8px; border-radius:5px; font-size:11px;">
-                    ${absents.map(p => `
-                        <div style="margin-bottom:5px; border-bottom:1px solid #222; padding-bottom:3px;">
-                            <b>${p.n}</b> (${p.team}) - <span style="color:#ff4444;">${p.inj > 0 ? '🚑 مصاب: '+p.inj : '🟥 موقوف: '+p.susp} جولة</span>
-                        </div>
-                    `).join('') || "لا يوجد غيابات حالياً"}
-                </div>
+    // ترتيب الهدافين (أعلى 10)
+    const topScorers = allPlayers
+        .filter(p => p.n && (p.goals || 0) > 0)
+        .sort((a, b) => (b.goals || 0) - (a.goals || 0))
+        .slice(0, 10);
 
-                <h5 style="color:var(--gold); margin-top:20px;"><i class="fas fa-fire"></i> هدافو الدوري</h5>
-                <table style="width:100%; font-size:12px; border-collapse:collapse;">
+    let h = `
+        <div style="direction:rtl; text-align:right; font-family: 'Cairo', sans-serif;">
+            <h3 style="color:var(--gold); text-align:center; border-bottom:1px solid #333; padding-bottom:10px;">📊 إحصائيات الدوري العامة</h3>
+            
+            <h5 style="color:#ff4444; margin-top:15px;"><i class="fas fa-user-slash"></i> الغيابات (إصابة / إيقاف)</h5>
+            <div style="max-height:120px; overflow-y:auto; background:#111; padding:8px; border-radius:5px; font-size:11px; border: 1px solid #222;">
+                ${absents.map(p => `
+                    <div style="margin-bottom:5px; border-bottom:1px solid #222; padding-bottom:3px;">
+                        <b style="color:#fff;">${p.n}</b> <span style="color:#888;">(${p.team})</span> - <span style="color:#ff4444;">${p.inj > 0 ? '🚑 مصاب: '+p.inj : '🟥 موقوف: '+p.susp} جولة</span>
+                    </div>
+                `).join('') || "<div style='text-align:center; color:#666;'>لا يوجد غيابات حالياً</div>"}
+            </div>
+
+            <h5 style="color:var(--gold); margin-top:20px;"><i class="fas fa-fire"></i> هدافو الدوري</h5>
+            <div style="overflow-x:auto;">
+                <table style="width:100%; font-size:12px; border-collapse:collapse; min-width:300px;">
                     <tr style="color:#777; border-bottom:1px solid #444; text-align:center;">
-                        <th style="padding:5px;">اللاعب</th><th>الفريق</th><th>المدرب</th><th>⚽</th>
+                        <th style="padding:8px;">اللاعب</th>
+                        <th style="padding:8px;">الفريق</th>
+                        <th style="padding:8px;">المدرب</th>
+                        <th style="padding:8px;">⚽</th>
                     </tr>
                     ${topScorers.map(p => `
                         <tr style="border-bottom:1px solid #111; text-align:center;">
-                            <td style="padding:8px;">${p.n}</td>
-                            <td>${p.team}</td>
-                            <td><small>${p.owner}</small></td>
-                            <td style="color:var(--gold); font-weight:bold;">${p.goals}</td>
+                            <td style="padding:8px; color:#fff;">${p.n}</td>
+                            <td style="padding:8px; color:#aaa;">${p.team}</td>
+                            <td style="padding:8px; color:#888;"><small>${p.owner}</small></td>
+                            <td style="padding:8px; color:var(--gold); font-weight:bold; font-size:14px;">${p.goals}</td>
                         </tr>
-                    `).join('') || "<tr><td colspan='4'>لا يوجد أهداف بعد</td></tr>"}
+                    `).join('') || "<tr><td colspan='4' style='text-align:center; padding:20px; color:#666;'>لا يوجد أهداف بعد</td></tr>"}
                 </table>
-            </div>`;
-        this.modal(h);
-    },
+            </div>
+        </div>`;
+    this.modal(h);
+}, 
+
+
 
     // أضف دالتك هنا داخل الـ UI لتكون منظمة (تأكد من تعديل الـ UID لو بتستخدم ME)
     async getCoachRanking() {
