@@ -428,28 +428,38 @@ const Core = {
 
             console.log("Logged in user:", user.displayName);
 
-            const uidSnap = await db.ref('uids/' + uid).once('value');
+                        const uidSnap = await db.ref('uids/' + uid).once('value');
+            
             if (uidSnap.exists()) {
+                // لو الحساب موجود فعلاً، بنجيب الاسم الأصلي المحفوظ للمدرب
                 ME = uidSnap.val().username;
             } else {
+                // لو مدرب جديد، بنشوف هل الاسم اللي كتبه محجوز لحد قبله؟
+                const checkUserExist = await db.ref('users/' + coachName).once('value');
+                
+                if (checkUserExist.exists()) {
+                    alert("⚠️ هذا الاسم محجوز لمدرب آخر، اختر اسماً جديداً");
+                    await firebase.auth().signOut();
+                    if(status) status.innerText = "❌ الاسم محجوز";
+                    return;
+                }
+
+                // لو الاسم متاح، بنربطه بالـ UID وننشئ الحساب لأول مرة
                 ME = coachName;
                 await db.ref('uids/' + uid).set({ username: coachName });
-                
-                const userSnap = await db.ref('users/' + coachName).once('value');
-                if (!userSnap.exists()) {
-                    await db.ref('users/' + coachName).set({
-                        username: coachName,
-                        uid: uid,
-                        email: user.email,
-                        team: "",
-                        budget: 100000000,
-                        lineup: {},
-                        formation: "433",
-                        tactics: { style: 'normal' },
-                        stats: { w: 0, d: 0, l: 0, pts: 0, p: 0 }
-                    });
-                }
+                await db.ref('users/' + coachName).set({
+                    username: coachName,
+                    uid: uid,
+                    email: user.email,
+                    team: "",
+                    budget: 100000000,
+                    lineup: {},
+                    formation: "433",
+                    tactics: { style: 'normal' },
+                    stats: { w: 0, d: 0, l: 0, pts: 0, p: 0 }
+                });
             }
+
 
             if (ME === "مايكل ماهر") {
                 const adminGate = document.getElementById('admin-gate');
