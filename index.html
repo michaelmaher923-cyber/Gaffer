@@ -492,17 +492,19 @@ const Core = {
     },
 
     refresh() {
-    if (!APP_STATE.user) return;
+        if (!APP_STATE.user) return;
 
-    if (APP_STATE.user.team === "" || APP_STATE.user.team === "بدون فريق") {
-        // بدل ما نفتح الاختيار علطول، نفتح شاشة الترحيب "الإجبارية"
-        UI.screen('scr-welcome'); 
-        document.getElementById('welcome-msg').innerText = `أهلاً يا كوتش ${ME}`;
-    } else {
-        UI.screen('scr-main');
-        UI.renderDashboard();
-    }
-}, 
+        // لو المدرب لسه م اختارش فريق، ابعته لصفحة الاختيار فوراً
+        if (APP_STATE.user.team === "" || APP_STATE.user.team === "بدون فريق") {
+            UI.screen('scr-picker'); 
+            UI.renderPicker(); // تأكد إن القائمة بتترسم
+        } else {
+            // لو عنده فريق، ادخل على الرئيسية
+            UI.screen('scr-main');
+            UI.renderDashboard();
+        }
+    },
+
 
 
 async pickTeam(name) {
@@ -596,12 +598,12 @@ const Engine = {
         if (toUser) {
             // لو مدرب حقيقي: نبعت العرض لبريده
             const offerId = Date.now();
-            await db.ref(`users/${toUser}/receivedOffers/${offerId}`).set({
+            await db.ref(`users/${toUser}/receivedOffers/${offerId}`).update({
                 from: APP_STATE.user.team, fromUser: ME, player: playerName,
                 price: offerPrice, status: 'pending', id: offerId, week: currentWeek
             });
-            // تسجيل إن المستخدم استهلك عرضه في هذه الجولة
-            await db.ref(`users/${ME}`).update({ lastOfferWeek: currentWeek });
+// تسجيل إن المستخدم استهلك عرضه في هذه الجولة
+await db.ref(`users/${ME}`).update({ lastOfferWeek: currentWeek });
             alert("تم إرسال العرض لمدرب الفريق.. انتظر رده في البريد.");
         } else {
             // لو كمبيوتر: نخليه يقرر فوراً
@@ -630,6 +632,7 @@ const Engine = {
             // في كل الحالات (قبول أو رفض) يتم تسجيل استهلاك العرض لهذه الجولة
             await db.ref(`users/${ME}`).update({ lastOfferWeek: week });
 
+
             if (accepted) {
                 // تنفيذ البيع فوراً
                 const cleanPlayer = { n: player.n, p: parseInt(player.p), pos: player.pos || "AM" };
@@ -653,23 +656,10 @@ const Engine = {
         if(!isAuto) UI.showSimOverlay(hName, aName);
         this.simSpeed = isAuto ? 0 : 2500; 
         let matchEvents = [];
-        // --- تعديل ذكي لمسح الأسماء الغريبة وتثبيت اسم المدرب ---
         const snapH = await db.ref('users').orderByChild('team').equalTo(hName).once('value');
         const snapA = await db.ref('users').orderByChild('team').equalTo(aName).once('value');
-        const rawH = snapH.val() || {};
-        const rawA = snapA.val() || {};
-
-        // مسك المفاتيح (الأهالي) اللي هي أسماء المدربين (مثلاً مايكل ماهر)
-        const hKey = Object.keys(rawH)[0]; 
-        const aKey = Object.keys(rawA)[0];
-
-        const dataH = rawH[hKey] || this.getCPUTeam(hName);
-        const dataA = rawA[aKey] || this.getCPUTeam(aName);
-
-        // ربط البيانات بالمفتاح عشان التحديث يتم في نفس المكان
-        if (hKey) dataH.uid = hKey; 
-        if (aKey) dataA.uid = aKey;
-        // ------------------------------------------------------
+        const dataH = Object.values(snapH.val() || {})[0] || this.getCPUTeam(hName);
+        const dataA = Object.values(snapA.val() || {})[0] || this.getCPUTeam(aName);
         // --- 1. تنظيف التشكيلة (طرد المصاب والموقوف) ---
         [dataH, dataA].forEach(team => {
             let lineup = team.lineup || {};
@@ -766,16 +756,18 @@ const Engine = {
                     let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
                     let pIdx = sQ.findIndex(px => px.n === pName);
                     if (pIdx !== -1) { 
-                        sQ[pIdx].inj = duration; 
-                        // تسجيل الإصابة للمدرب الحقيقي أو الكمبيوتر بشكل سليم
-                        if (sideData.uid) {
-                            db.ref(`users/${sideData.uid}/squad`).set(sQ);
-                        } else {
-                            let tIdx = APP_STATE.league.findIndex(t => t.name === sideData.team);
-                            if(tIdx !== -1) db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ inj: duration });
-                        }
-                    }
-                    if(!isAuto) UI.addSimLog(`?? إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
+    sQ[pIdx].inj = duration; 
+    if (sideData.username) {
+        db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ inj: duration });
+    } else {
+        let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
+        if (tIdx !== -1) {
+            db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ inj: duration });
+        }
+    }
+}
+
+                    if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
                     ejectedPlayers[side].push(pName);
                     ratings[side][pName] -= 1.0; // خصم من التقييم بسبب الخروج المبكر
                     matchEvents.push({ time: m, player: pName, type: 'injury', team: side, text: 'إصابة' });
@@ -808,16 +800,18 @@ if (Math.random() < hRisk) {
                 if(pIdx !== -1) {
                     sQ[pIdx].susp = 2; // إيقاف لجولة واحدة
 
-                    // --- [الإرسال لفايربيس] ---
-                                        if (sideData.uid) {
-                        // تحديث السكواد بالكامل لمنع ظهور الأرقام الغريبة (0, 4, 9)
-                        db.ref(`users/${sideData.uid}/squad`).set(sQ);
-                    }
- else {
-                        // تحديث لفريق الكمبيوتر (CPU)
-                        let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
-                        if(tIdx !== -1) db.ref(`league_data/${tIdx}/players/${pIdx}/susp`).set(2);
-                    }
+                    if (pIdx !== -1) { 
+    sQ[pIdx].susp = 2; 
+    if (sideData.username) {
+        db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ susp: 2 });
+    } else {
+        let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
+        if (tIdx !== -1) {
+            db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ susp: 2 });
+        }
+    }
+}
+
                 }
             }
         } else {
@@ -888,10 +882,12 @@ if (!isFriendly && scorer) {
     let pIdx = sQ.findIndex(px => px.n === scorer);
     if (pIdx !== -1) {
         sQ[pIdx].goals = (sQ[pIdx].goals || 0) + 1; // زيادة هدف
-        // تحديث السكواد بالكامل لضمان الترتيب ونظافة البيانات
-        if (dataH.uid) {
-            db.ref(`users/${dataH.uid}/squad`).set(sQ);
-        }
+        // تحديث في الفايربيز (للمستخدمين)
+        if (dataH.username) {
+    db.ref(`users/${dataH.username}/squad/${pIdx}`).update({ 
+        goals: sQ[pIdx].goals 
+    });
+}
  else {
             // تحديث للكمبيوتر
             let tIdx = APP_STATE.league.findIndex(t => t.name === hName);
@@ -914,10 +910,11 @@ let scorer = this.pickRealisticScorer(lineupA.filter(p => !ejectedPlayers.a.incl
                     let pIdx = sQ.findIndex(px => px.n === scorer);
                     if (pIdx !== -1) {
                         sQ[pIdx].goals = (sQ[pIdx].goals || 0) + 1;
-                                                if (dataA.uid) {
-                            // تحديث السكواد بالكامل لمنع تكرار الأسماء أو كسر المصفوفة
-                            db.ref(`users/${dataA.uid}/squad`).set(sQ);
-                        }
+                        if (dataA.username) {
+    db.ref(`users/${dataA.username}/squad/${pIdx}`).update({ 
+        goals: sQ[pIdx].goals 
+    });
+}
  else {
                             // إذا كان الفريق كمبيوتر
                             let tIdx = APP_STATE.league.findIndex(t => t.name === aName);
@@ -957,17 +954,12 @@ let scorer = this.pickRealisticScorer(lineupA.filter(p => !ejectedPlayers.a.incl
                 let mIdx = matches.findIndex(m => m.h === hName && m.a === aName);
                 if (mIdx !== -1) {
                                         await db.ref(`schedule/${week}/matches/${mIdx}`).update({
-    done: true, 
-    running: false, // ضفنا دي عشان نقفل القفل فوراً
-    runTime: null,  // ضفنا دي عشان ننظف الداتا بيز
-    scoreH: sh, 
-    scoreA: sa,
-    events: matchEvents,
-    ratings: ratings,
-    lineups: { h: lineupH, a: lineupA },
-    fullStats: stats 
-});
-
+                        done: true, scoreH: sh, scoreA: sa,
+                        events: matchEvents,
+                        ratings: ratings,
+                        lineups: { h: lineupH, a: lineupA },
+                        fullStats: stats // إضافة الإحصائيات الجديدة هنا
+                    });
 
                     break;
                 }
@@ -1155,27 +1147,30 @@ await Admin.updateTeamStatus(dataA.username);
             };
         });
 
-        // 2. تحديث إحصائيات المدرب (Stats) - التعديل هنا
-        // البحث عن المستخدم الذي يمتلك هذا الفريق
-        const userSnap = await db.ref('users').orderByChild('team').equalTo(teamName).once('value');
-        
-        if (userSnap.exists()) {
-            const userData = userSnap.val();
-            const uid = Object.keys(userData)[0]; // جلب الـ UID الحقيقي للمستخدم
+// 2. تحديث إحصائيات المدرب (Stats)
+const userSnap = await db.ref('users').orderByChild('team').equalTo(teamName).once('value');
 
-            await db.ref(`users/${uid}/stats`).transaction(st => {
-                st = st || { pts: 0, w: 0, d: 0, l: 0 };
-                return {
-                    pts: (st.pts || 0) + pts,
-                    w: (st.w || 0) + w,
-                    d: (st.d || 0) + d,
-                    l: (st.l || 0) + l
-                };
-            });
-            console.log(`✅ تم تحديث إحصائيات المدرب لفريق ${teamName}`);
-        } else {
-            console.log(`ℹ️ فريق ${teamName} يتبع الكمبيوتر، لا يوجد stats لتحديثها.`);
-        }
+if (userSnap.exists()) {
+    const userData = userSnap.val();
+    // هنا الـ Key هو اسم المدرب (Username) لأن ده نظام الـ Database عندك
+    const coachUsername = Object.keys(userData)[0]; 
+
+    // التعديل هنا: نستخدم اسم المدرب مباشرة في المسار
+    await db.ref(`users/${coachUsername}/stats`).transaction(st => {
+        st = st || { pts: 0, w: 0, d: 0, l: 0, p: 0 }; // ضفت لك p للمباريات الملعوبة
+        return {
+            pts: (st.pts || 0) + pts,
+            w: (st.w || 0) + w,
+            d: (st.d || 0) + d,
+            l: (st.l || 0) + l,
+            p: (st.p || 0) + 1 // زيادة عدد المباريات الملعوبة
+        };
+    });
+    console.log(`✅ تم تحديث إحصائيات المدرب: ${coachUsername}`);
+} else {
+    console.log(`ℹ️ فريق ${teamName} يتبع الكمبيوتر.`);
+}
+
     };
 
     // توزيع النقاط حسب النتيجة
@@ -1265,100 +1260,98 @@ async redeemDailyCode() {
 const AutoEngine = {
     isProcessing: false, // قفل لمنع تداخل العمليات
         async checkAndRun() {
-    if (this.isProcessing) return;
-    this.isProcessing = true;
+        if (this.isProcessing) return;
+        this.isProcessing = true;
 
-    try {
+        // جلب وقت السيرفر الحقيقي من الفايربيز للتأكد أن المستخدم لم يغير ساعة جهازه
         const serverTimeSnap = await db.ref('.info/serverTimeOffset').once('value');
-        const serverTime = Date.now() + (serverTimeSnap.val() || 0);
+        const serverTime = Date.now() + serverTimeSnap.val();
 
-        // جلب نسخة فريش من الجدول بالكامل لضمان الدقة
-        const scheduleSnap = await db.ref('schedule').once('value');
-        const schedule = scheduleSnap.val();
-        if (!schedule) return;
+        const schedule = APP_STATE.schedule;
 
         for (let week in schedule) {
             let weekData = schedule[week];
-            if (!weekData.time || serverTime < weekData.time) continue;
-
-            let matches = weekData.matches || [];
-            
-            // --- الجزء الأول: محاكاة الماتشات ---
-            for (let i = 0; i < matches.length; i++) {
-                let m = matches[i];
-                if (m.running && (serverTime - (m.runTime || 0) > 60000)) {
-                    await db.ref(`schedule/${week}/matches/${i}`).update({ running: false });
-                    m.running = false;
-                }
-
-                if (!m.done && m.h !== "استراحة" && m.a !== "استراحة" && !m.running) {
-                    const lockRef = db.ref(`schedule/${week}/matches/${i}/running`);
-                    const transactionRes = await lockRef.transaction(v => v === true ? undefined : true);
-
-                    if (transactionRes.committed) {
-                        await db.ref(`schedule/${week}/matches/${i}`).update({ runTime: serverTime });
+            // المقارنة الآن تتم بوقت السيرفر الموثوق
+            if (weekData.time && serverTime >= weekData.time) {
+                let matches = weekData.matches || [];
+                for (let i = 0; i < matches.length; i++) {
+                    let m = matches[i];
+                    if (!m.done && m.h !== "استراحة" && m.a !== "استراحة" && !m.running) {
+                        await db.ref(`schedule/${week}/matches/${i}`).update({ running: true });
                         await Engine.simulate(m.h, m.a, true, false); 
-                        // ملاحظة: simulate لازم تحدث done:true و running:false في آخرها
+                        await db.ref(`schedule/${week}/matches/${i}`).update({ done: true, running: null });
                     }
                 }
-            }
+                // --- بداية تعديل خصم الإصابات والإيقافات الشامل ---
+                let currentMatchesSnap = await db.ref(`schedule/${week}/matches`).once('value');
+                let currentMatches = currentMatchesSnap.val() || [];
+                let isRoundFinished = currentMatches.every(m => m.done || m.h === "استراحة" || m.a === "استراحة");
 
-            // --- الجزء الثاني: تحديث الإصابات (هنا التعديل المطلوب) ---
-            // بنجيب حالة الماتشات "الآن" من الفايربيز للتأكد إن كله قلب Done
-            const freshMatchesSnap = await db.ref(`schedule/${week}/matches`).once('value');
-            const currentMatches = freshMatchesSnap.val() || [];
-
-            // التأكد أن كل الماتشات انتهت (أو استراحة)
-            let isRoundFinished = currentMatches.every(m => 
-                m.done === true || m.h === "استراحة" || m.a === "استراحة"
-            );
-
-            // لو الجولة خلصت والـ injUpdated لسه مش موجودة (false أو undefined)
-            if (isRoundFinished && !weekData.injUpdated) {
-                console.log(`🚀 جولة ${week} اكتملت.. جاري تنفيذ injUpdated...`);
-                const updates = {};
-                
-                // 1. تحديث فرق الكمبيوتر
-                const leagueSnap = await db.ref('league_data').once('value');
-                const leagues = leagueSnap.val();
-                if (leagues) {
-                    leagues.forEach((team, tIdx) => {
-                        if (team.players) {
-                            team.players.forEach((p, pIdx) => {
-                                if (p.inj > 0) updates[`league_data/${tIdx}/players/${pIdx}/inj`] = p.inj - 1;
-                                if (p.susp > 0) updates[`league_data/${tIdx}/players/${pIdx}/susp`] = p.susp - 1;
-                            });
-                        }
-                    });
-                }
-
-                // 2. تحديث فرق المستخدمين
-                const usersSnap = await db.ref('users').once('value');
-                const users = usersSnap.val();
-                if (users) {
-                    for (let uid in users) {
-                        let squad = Array.isArray(users[uid].squad) ? users[uid].squad : Object.values(users[uid].squad || {});
-                        squad.forEach((p, pIdx) => {
-                            if (p.inj > 0) updates[`users/${uid}/squad/${pIdx}/inj`] = p.inj - 1;
-                            if (p.susp > 0) updates[`users/${uid}/squad/${pIdx}/susp`] = p.susp - 1;
+                if (isRoundFinished && !weekData.injUpdated) {
+                    const updates = {};
+                    
+                    // 1. تحديث فرق الكمبيوتر (league_data)
+                    const leagueSnap = await db.ref('league_data').once('value');
+                    const leagues = leagueSnap.val();
+                    if (leagues) {
+                        leagues.forEach((team, tIdx) => {
+                            if (team.players) {
+                                team.players.forEach((p, pIdx) => {
+                                    if (p.inj > 0) updates[`league_data/${tIdx}/players/${pIdx}/inj`] = p.inj - 1;
+                                    if (p.susp > 0) updates[`league_data/${tIdx}/players/${pIdx}/susp`] = p.susp - 1;
+                                });
+                            }
                         });
                     }
-                }
 
-                // أهم سطر: تسجيل إن التحديث تم لهذه الجولة
-                updates[`schedule/${week}/injUpdated`] = true;
-                
-                await db.ref().update(updates);
-                console.log(`✅ تم تحديث الإصابات وظهرت injUpdated في الجولة ${week}`);
-            }
+// 2. تحديث فرق المدربين (users) لخصم جولة من الإصابات والإيقافات
+const usersSnap = await db.ref('users').once('value');
+const users = usersSnap.val();
+
+if (users) {
+    for (let coachName in users) { // هنا coachName هو الـ Key (اسم المدرب)
+        const userEntry = users[coachName];
+        
+        // التأكد إن فيه تشكيلة موجودة للمدرب ده
+        if (userEntry.squad) {
+            let squad = Array.isArray(userEntry.squad) ? userEntry.squad : Object.values(userEntry.squad);
+            
+            squad.forEach((p, pIdx) => {
+                // تقليل مدة الإصابة
+                if (p.inj > 0) {
+                    updates[`users/${coachName}/squad/${pIdx}/inj`] = p.inj - 1;
+                }
+                // تقليل مدة الإيقاف
+                if (p.susp > 0) {
+                    updates[`users/${coachName}/squad/${pIdx}/susp`] = p.susp - 1;
+                }
+            });
         }
-    } catch (e) {
-        console.error("CheckAndRun Error:", e);
-    } finally {
-        this.isProcessing = false;
     }
 }
 
+// تحديث حالة الأسبوع عشان العملية ما تتكررش
+updates[`schedule/${week}/injUpdated`] = true;
+
+// تنفيذ كل التحديثات مرة واحدة (Atomic Update)
+await db.ref().update(updates);
+
+                }
+                // --- نهاية التعديل ---
+
+
+            }
+        }
+                        // --- إضافة ذكية: تحديث حالة اللاعبين بعد انتهاء كل مباريات الجولة ---
+                let allDone = matches.every(m => m.done || m.h === "استراحة" || m.a === "استراحة");
+                if (allDone && !weekData.statusUpdated) {
+                    console.log("🔄 جولة انتهت: جاري تحديث الإصابات والإيقافات...");
+                    await Admin.updateAllPlayersStatus();
+                    await db.ref(`schedule/${week}/statusUpdated`).set(true);
+                }
+
+        this.isProcessing = false;
+    }
 
 };
 
@@ -1562,101 +1555,76 @@ showAdmin() {
 },
 
     
-async showLeagueStats() {
-    this.modal("<h4 style='color:var(--gold)'>جاري تجميع بيانات الدوري...</h4>");
-    
-    let allPlayers = [];
-    let absents = [];
-
-    // جلب بيانات المستخدمين والكمبيوتر
-    const [uSnap, cSnap] = await Promise.all([
-        db.ref('users').once('value'),
-        db.ref('league_data').once('value')
-    ]);
-    
-    const users = uSnap.val() || {};
-    const computers = cSnap.val() || [];
-
-    // 1. تجميع لاعبي البشر
-    Object.keys(users).forEach(uid => {
-        const u = users[uid];
-        const squadData = u.squad || [];
-        const sq = Array.isArray(squadData) ? squadData : Object.values(squadData);
+    async showLeagueStats() {
+        this.modal("<h4 style='color:var(--gold)'>جاري تجميع بيانات الدوري...</h4>");
         
-        sq.forEach(p => {
-            if (p && p.n) {
-                let pData = { 
-                    ...p, 
-                    team: u.team || "فريق مجهول", 
-                    owner: u.username || "مدرب" 
-                };
+        let allPlayers = [];
+        let absents = [];
+
+        // جلب بيانات المستخدمين والكمبيوتر
+        const [uSnap, cSnap] = await Promise.all([
+            db.ref('users').once('value'),
+            db.ref('league_data').once('value')
+        ]);
+        
+        const users = uSnap.val() || {};
+        const computers = cSnap.val() || [];
+
+        // تجميع لاعبي البشر
+        Object.keys(users).forEach(uid => {
+            const u = users[uid];
+            const sq = Array.isArray(u.squad) ? u.squad : Object.values(u.squad || {});
+            sq.forEach(p => {
+                let pData = { ...p, team: u.team, owner: u.ME || "مدرب" };
                 allPlayers.push(pData);
                 if ((p.inj || 0) > 0 || (p.susp || 0) > 0) absents.push(pData);
-            }
+            });
         });
-    });
 
-    // 2. تجميع لاعبي الكمبيوتر
-    computers.forEach(t => {
-        if (t && t.players) {
-            const teamName = t.team || t.name || "كمبيوتر";
-            t.players.forEach(p => {
-                if (p && p.n) {
-                    let pData = { 
-                        ...p, 
-                        team: teamName, 
-                        owner: "الذكاء الاصطناعي" 
-                    };
+        // تجميع لاعبي الكمبيوتر
+        computers.forEach(t => {
+            if(t.players) {
+                t.players.forEach(p => {
+                    let pData = { ...p, team: t.name, owner: "الكمبيوتر" };
                     allPlayers.push(pData);
                     if ((p.inj || 0) > 0 || (p.susp || 0) > 0) absents.push(pData);
-                }
-            });
-        }
-    });
+                });
+            }
+        });
 
-    // ترتيب الهدافين (أعلى 10)
-    const topScorers = allPlayers
-        .filter(p => p.n && (p.goals || 0) > 0)
-        .sort((a, b) => (b.goals || 0) - (a.goals || 0))
-        .slice(0, 10);
+        // ترتيب الهدافين (أعلى 10)
+        const topScorers = allPlayers.filter(p => p.goals > 0).sort((a,b) => b.goals - a.goals).slice(0, 10);
 
-    let h = `
-        <div style="direction:rtl; text-align:right; font-family: 'Cairo', sans-serif;">
-            <h3 style="color:var(--gold); text-align:center; border-bottom:1px solid #333; padding-bottom:10px;">📊 إحصائيات الدوري العامة</h3>
-            
-            <h5 style="color:#ff4444; margin-top:15px;"><i class="fas fa-user-slash"></i> الغيابات (إصابة / إيقاف)</h5>
-            <div style="max-height:120px; overflow-y:auto; background:#111; padding:8px; border-radius:5px; font-size:11px; border: 1px solid #222;">
-                ${absents.map(p => `
-                    <div style="margin-bottom:5px; border-bottom:1px solid #222; padding-bottom:3px;">
-                        <b style="color:#fff;">${p.n}</b> <span style="color:#888;">(${p.team})</span> - <span style="color:#ff4444;">${p.inj > 0 ? '🚑 مصاب: '+p.inj : '🟥 موقوف: '+p.susp} جولة</span>
-                    </div>
-                `).join('') || "<div style='text-align:center; color:#666;'>لا يوجد غيابات حالياً</div>"}
-            </div>
+        let h = `
+            <div style="direction:rtl; text-align:right;">
+                <h3 style="color:var(--gold); text-align:center; border-bottom:1px solid #333; padding-bottom:10px;">📊 إحصائيات الدوري العامة</h3>
+                
+                <h5 style="color:#ff4444; margin-top:15px;"><i class="fas fa-user-slash"></i> الغيابات (إصابة / إيقاف)</h5>
+                <div style="max-height:120px; overflow-y:auto; background:#111; padding:8px; border-radius:5px; font-size:11px;">
+                    ${absents.map(p => `
+                        <div style="margin-bottom:5px; border-bottom:1px solid #222; padding-bottom:3px;">
+                            <b>${p.n}</b> (${p.team}) - <span style="color:#ff4444;">${p.inj > 0 ? '🚑 مصاب: '+p.inj : '🟥 موقوف: '+p.susp} جولة</span>
+                        </div>
+                    `).join('') || "لا يوجد غيابات حالياً"}
+                </div>
 
-            <h5 style="color:var(--gold); margin-top:20px;"><i class="fas fa-fire"></i> هدافو الدوري</h5>
-            <div style="overflow-x:auto;">
-                <table style="width:100%; font-size:12px; border-collapse:collapse; min-width:300px;">
+                <h5 style="color:var(--gold); margin-top:20px;"><i class="fas fa-fire"></i> هدافو الدوري</h5>
+                <table style="width:100%; font-size:12px; border-collapse:collapse;">
                     <tr style="color:#777; border-bottom:1px solid #444; text-align:center;">
-                        <th style="padding:8px;">اللاعب</th>
-                        <th style="padding:8px;">الفريق</th>
-                        <th style="padding:8px;">المدرب</th>
-                        <th style="padding:8px;">⚽</th>
+                        <th style="padding:5px;">اللاعب</th><th>الفريق</th><th>المدرب</th><th>⚽</th>
                     </tr>
                     ${topScorers.map(p => `
                         <tr style="border-bottom:1px solid #111; text-align:center;">
-                            <td style="padding:8px; color:#fff;">${p.n}</td>
-                            <td style="padding:8px; color:#aaa;">${p.team}</td>
-                            <td style="padding:8px; color:#888;"><small>${p.owner}</small></td>
-                            <td style="padding:8px; color:var(--gold); font-weight:bold; font-size:14px;">${p.goals}</td>
+                            <td style="padding:8px;">${p.n}</td>
+                            <td>${p.team}</td>
+                            <td><small>${p.owner}</small></td>
+                            <td style="color:var(--gold); font-weight:bold;">${p.goals}</td>
                         </tr>
-                    `).join('') || "<tr><td colspan='4' style='text-align:center; padding:20px; color:#666;'>لا يوجد أهداف بعد</td></tr>"}
+                    `).join('') || "<tr><td colspan='4'>لا يوجد أهداف بعد</td></tr>"}
                 </table>
-            </div>
-        </div>`;
-    this.modal(h);
-}, 
-
-
+            </div>`;
+        this.modal(h);
+    },
 
     // أضف دالتك هنا داخل الـ UI لتكون منظمة (تأكد من تعديل الـ UID لو بتستخدم ME)
     async getCoachRanking() {
@@ -1791,7 +1759,20 @@ async showLeagueStats() {
         const o = snap.val();
         if(!o) return alert("خطأ: العرض غير موجود!");
 
-        const buyerSnap = await db.ref('users/' + o.fromUser).once('value');
+        // البحث عن بيانات المشتري باستخدام اسمه (Username)
+const buyerSnap = await db.ref('users/' + o.fromUser).once('value');
+
+if (buyerSnap.exists()) {
+    // هنا bKey هو نفسه o.fromUser (اسم المدرب)
+    // و bData هي كل بياناته (الميزانية، الفريق، إلخ)
+    bKey = buyerSnap.key; 
+    bData = buyerSnap.val();
+    
+    console.log(`✅ جلب بيانات المشتري بنجاح: ${bKey}`);
+} else {
+    console.error("❌ فشل العثور على بيانات المشتري في المسار المحدد");
+}
+
         let bKey, bData;
 
         if(buyerSnap.exists()) {
@@ -1817,26 +1798,29 @@ async showLeagueStats() {
         };
 
         const updates = {};
-        // 1. حذف اللاعب من البائع وزيادة ميزانيته
-        updates[`users/${ME}/squad`] = APP_STATE.user.squad.filter(x => x.n !== o.player);
-        updates[`users/${ME}/budget`] = APP_STATE.user.budget + parseInt(o.price);
+// 1. تحديث بيانات البائع (المدرب الحالي ME)
+// الأفضل نحدث الميزانية ونمسح اللاعب من مصفوفته
+updates[`users/${ME}/budget`] = (APP_STATE.user.budget || 0) + parseInt(o.price);
+// ملاحظة: فلترة الـ squad هنا بتمسح اللاعب من المصفوفة اللي هتروح للـ DB
+const newSellerSquad = APP_STATE.user.squad.filter(x => x.n !== o.player);
+updates[`users/${ME}/squad`] = newSellerSquad;
 
-        // 2. إضافة اللاعب للمشتري بشكل مصفوفة نظيفة
-        const currentBuyerSquad = Array.isArray(bData.squad) ? bData.squad : Object.values(bData.squad || {});
-        updates[`users/${bKey}/squad`] = [...currentBuyerSquad, cleanPlayerData];
-        
-        // 3. خصم المبلغ من المشتري وتحديث حالة العرض
-        updates[`users/${bKey}/budget`] = bData.budget - parseInt(o.price);
-        updates[offerPath + '/status'] = 'accepted';
+// 2. تحديث بيانات المشتري (bKey هو اسم المدرب المشتري)
+const currentBuyerSquad = Array.isArray(bData.squad) ? bData.squad : Object.values(bData.squad || {});
+updates[`users/${bKey}/squad`] = [...currentBuyerSquad, cleanPlayerData];
+updates[`users/${bKey}/budget`] = (bData.budget || 0) - parseInt(o.price);
 
-        // 4. إزالة اللاعب من التشكيلة الأساسية للبائع إذا كان موجوداً
-        let currentLineup = APP_STATE.user.lineup || {};
-        for(let slot in currentLineup) {
-            if(currentLineup[slot] === o.player) {
-                updates[`users/${ME}/lineup/${slot}`] = null;
-                
-            }
-        }
+// 3. تحديث حالة العرض
+updates[offerPath + '/status'] = 'accepted';
+
+// 4. تنظيف التشكيلة الأساسية للبائع (Lineup)
+let currentLineup = APP_STATE.user.lineup || {};
+for(let slot in currentLineup) {
+    if(currentLineup[slot] === o.player) {
+        updates[`users/${ME}/lineup/${slot}`] = null;
+    }
+}
+
 
         try {
             await db.ref().update(updates);
@@ -1992,40 +1976,16 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
     }
 
 
-    if (lineupChanged) {
-        db.ref(`users/${ME}/lineup`).set(currentLineup);
-        console.log("⚠️ تم استبعاد اللاعبين غير الجاهزين من التشكيلة تلقائياً");
-        // مثال لما يجب فعله قبل الحفظ
-let lineupToSave = { ...APP_STATE.myLineup }; 
-delete lineupToSave.formation; // حذف بند الخطة حتى لا يظهر كلاعب
-
-// ثم الحفظ في الفايربيس
-// 1. تنظيف الكائن من أي لاعب اسمه "رقم" قبل الحفظ
+    // تنظيف الكائن من أي "قيم" غير صحيحة (أرقام الخطط مثلاً)
 Object.keys(lineupToSave).forEach(slot => {
-    const pData = lineupToSave[slot];
+    const pName = lineupToSave[slot];
     
-    // إذا كان العنصر يحتوي على اسم (n) وهذا الاسم عبارة عن رقم فقط
-    if (pData && pData.n && !isNaN(pData.n)) {
+    // لو القيمة عبارة عن رقم (زي "433") أو مش موجودة أصلاً، احذفها من الـ Lineup
+    if (!pName || !isNaN(pName) || pName === 'formation') {
         delete lineupToSave[slot];
     }
 });
-
-// 2. الآن الحفظ في قاعدة البيانات وهو "نظيف"
-db.ref(`users/${ME}/lineup`).set(lineupToSave);
-
-
-sortedKeys.forEach(key => {
-    let pName = lineupData[key];
-    
-    // تعديل الشرط ليتجاهل حقل formation وأي أرقام خطط
-    if (pName && key !== 'formation' && isNaN(pName)) { 
-        let rate = (ratings[sideKey] && ratings[sideKey][pName]) ? ratings[sideKey][pName] : 6.0;
-        ratingsList.push({ name: pName, rate: rate });
-    }
-});
-
-    }
-}
+} 
 
         const layout = document.getElementById('pitch-layout'); 
         const bar = document.getElementById('formation-bar');
@@ -2425,29 +2385,31 @@ const Admin = {
 
             let updates = {};
 
-            // 1. مسح بيانات المدربين مع الحفاظ على الحسابات الأساسية
-            for (let userId in users) {
-                        // --- [إضافة تسجيل الإنجاز] ---
-            let userTeam = users[userId].team;
-            if (userTeam === firstPlace.name) {
-                const tr = users[userId].trophies || [];
-                updates[`/users/${userId}/trophies`] = [...tr, { rank: 1, team: userTeam, date: new Date().toLocaleDateString() }];
-            } else if (userTeam === secondPlace.name) {
-                const tr = users[userId].trophies || [];
-                updates[`/users/${userId}/trophies`] = [...tr, { rank: 2, team: userTeam, date: new Date().toLocaleDateString() }];
-            }
-            // ----------------------------
+        // 1. مسح بيانات المدربين مع الحفاظ على الحسابات الأساسية
+for (let userId in users) { // هنا userId هو الـ Username (مثل "مايكل ماهر")
+    
+    // --- [إضافة تسجيل الإنجاز] ---
+    let userTeam = users[userId].team;
+    let tr = users[userId].trophies || []; // جلب البطولات القديمة إن وجدت
 
-                updates[`/users/${userId}/budget`] = 100000000;   
-                updates[`/users/${userId}/LastFriendlyWeek`] = null; 
-                updates[`/users/${userId}/team`] = "بدون فريق";
-                updates[`/users/${userId}/LastTrainDay`] = null; 
-                updates[`/users/${userId}/ReceivedOffers`] = null; 
-                updates[`/users/${userId}/Specialists`] = null; 
-                updates[`/users/${userId}/tactics`] = null; 
-                updates[`/users/${userId}/squad`] = null; 
-                updates[`/users/${userId}/lineup`] = null; 
-            }
+    if (userTeam === firstPlace.name) {
+        updates[`/users/${userId}/trophies`] = [...tr, { rank: 1, team: userTeam, date: new Date().toLocaleDateString() }];
+    } else if (userTeam === secondPlace.name) {
+        updates[`/users/${userId}/trophies`] = [...tr, { rank: 2, team: userTeam, date: new Date().toLocaleDateString() }];
+    }
+    // ----------------------------
+
+    // تصحيح المسارات لتطابق ما استخدمناه سابقاً (CamelCase)
+    updates[`/users/${userId}/budget`] = 100000000;   
+    updates[`/users/${userId}/lastFriendlyWeek`] = null; // حرف l صغير
+    updates[`/users/${userId}/team`] = "بدون فريق";
+    updates[`/users/${userId}/lastTrainDay`] = null;    // حرف l صغير
+    updates[`/users/${userId}/receivedOffers`] = null;  // حرف r صغير
+    updates[`/users/${userId}/specialists`] = null;    // حرف s صغير
+    updates[`/users/${userId}/tactics`] = null; 
+    updates[`/users/${userId}/squad`] = null; 
+    updates[`/users/${userId}/lineup`] = null; 
+}
 
             // 2. مسح الفرق المحجوزة لفتح المجال لاختيار فرق جديدة
             updates[`/taken_teams`] = null; 
@@ -2573,7 +2535,5 @@ setInterval(() => { AutoEngine.checkAndRun(); }, 60000);
 </script>
 </body>
 </html>
-
-
 
 
