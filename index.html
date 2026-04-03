@@ -661,7 +661,6 @@ const Engine = {
         if(!isAuto) UI.showSimOverlay(hName, aName);
         this.simSpeed = isAuto ? 0 : 2500; 
         let matchEvents = [];
-        let matchYellowCards = { h: [], a: [] }; 
         const snapH = await db.ref('users').orderByChild('team').equalTo(hName).once('value');
         const snapA = await db.ref('users').orderByChild('team').equalTo(aName).once('value');
         const dataH = Object.values(snapH.val() || {})[0] || this.getCPUTeam(hName);
@@ -757,95 +756,87 @@ const Engine = {
                 document.getElementById('sim-timer').innerText = m + ":00";
             }
 
-// --- كود الأحداث الشامل (إصابة / طرد مباشر / إنذارات) ---
-if (Math.random() < 0.15) { 
-    let side = Math.random() > 0.5 ? 'h' : 'a';
-    let sideLineup = side === 'h' ? lineupH : lineupA;
-    let activeOnPitch = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
-    let pName = activeOnPitch[Math.floor(Math.random() * activeOnPitch.length)];
+                        // حدث الإصابة
+            if (Math.random() < 0.03) {
+                let side = Math.random() > 0.5 ? 'h' : 'a';
+                let sideLineup = side === 'h' ? lineupH : lineupA;
+                let activeOnPitch = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
+                let pName = activeOnPitch[Math.floor(Math.random() * activeOnPitch.length)];
 
-    if (pName) {
-        let eventRand = Math.random();
-        let sideData = side === 'h' ? dataH : dataA;
-        let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
-        let pIdx = sQ.findIndex(px => px.n === pName);
+                if (pName) {
+                    let duration = Math.floor(Math.random() * 3) + 2;
+                    let sideData = side === 'h' ? dataH : dataA;
+                    let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
+                    let pIdx = sQ.findIndex(px => px.n === pName);
+                         if (pIdx !== -1) { 
+    sQ[pIdx].inj = duration; 
+    if (sideData.username) {
+        db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ inj: duration });
+    } else {
+        let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
+        if (tIdx !== -1) {
+            db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ inj: duration });
+        }
+    }
+}
 
-        // 1. حالة الإصابة (3%)
-        if (eventRand < 0.03) {
-            let duration = Math.floor(Math.random() * 3) + 2;
-            if (pIdx !== -1) { 
-                sQ[pIdx].inj = duration; 
-                if (sideData.username) {
-                    // السطر ده هو اللي كان شغال عندك للإصابة
-                    db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ inj: duration });
-                } else {
-                    let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
-                    if (tIdx !== -1) {
-                        db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ inj: duration });
-                    }
+                    if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
+                    ejectedPlayers[side].push(pName);
+                    ratings[side][pName] -= 1.0; // خصم من التقييم بسبب الخروج المبكر
+                    matchEvents.push({ time: m, player: pName, type: 'injury', team: side, text: 'إصابة' });
                 }
             }
-            if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
-            ejectedPlayers[side].push(pName);
-            ratings[side][pName] -= 1.0;
-            matchEvents.push({ time: m, player: pName, type: 'injury', team: side, text: 'إصابة' });
-        } 
-        
-        // 2. حالة الطرد المباشر (1%)
-        else if (eventRand < 0.04) { 
-            let duration = Math.floor(Math.random() * 3) + 2;
-            if (pIdx !== -1) { 
+
+// --- [كود الكروت المطور ليرسل لفايربيس] ---
+// 1. حساب مخاطر التدخلات العنيفة (الإنذارات والطرود)
+let hRisk = (dataH.tactics?.press === 'aggr' ? 0.05 : 0.03); 
+if (Math.random() < hRisk) {
+    let side = (Math.random() > 0.5 ? 'h' : 'a'); // خليناها 0.5 عشان العدل بين الطرفين
+    let sideLineup = (side === 'h' ? lineupH : lineupA);
+    let activePlayers = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
+    let pName = activePlayers[Math.floor(Math.random() * activePlayers.length)];
+    
+    if(pName) {
+        // فحص هل اللاعب معه إنذار أصفر مسبق في مصفوفة أحداث المباراة
+        let hasYellow = matchEvents.find(e => e.player === pName && e.type === 'yellow' && e.team === side);
+        let isRed = (Math.random() < 0.10 || hasYellow); // طرد مباشر بنسبة 10% أو لو معه أصفر
+
+        if (isRed) {
+            let duration = Math.floor(Math.random() * 3) + 2; // مدة الإيقاف
+            let sideData = (side === 'h' ? dataH : dataA);
+            let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
+            let pIdx = sQ.findIndex(px => px.n === pName);
+
+            // --- [منطق الرفع لفايربيس مثل الإصابة تماماً] ---
+            if(pIdx !== -1 && !isFriendly) {
                 sQ[pIdx].susp = duration; 
                 if (sideData.username) {
+                    // التحديث للمدرب الحقيقي باستخدام update
                     db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ susp: duration });
                 } else {
+                    // التحديث لفريق الكمبيوتر
                     let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
-                    if (tIdx !== -1) {
+                    if(tIdx !== -1) {
                         db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ susp: duration });
                     }
                 }
             }
-            if(!isAuto) UI.addSimLog(`🟥 طرد مباشر: [${pName}] وخروج ${duration} جولة`, 'orange');
-            ejectedPlayers[side].push(pName);
-            ratings[side][pName] -= 1.0;
-            matchEvents.push({ time: m, player: pName, type: 'susp', team: side, text: 'طرد مباشر' });
-        }
 
-        // 3. نظام الإنذارات (بقية الـ 15%)
-        else {
-            if (!matchYellowCards[side].includes(pName)) {
-                // إنذار أول 🟨
-                matchYellowCards[side].push(pName);
-                if (!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
-                ratings[side][pName] -= 0.2;
-                matchEvents.push({ time: m, player: pName, type: 'yellow_card', team: side, text: 'إنذار أصفر' });
-            } else {
-                // إنذار ثان = طرد 🟥
-                let duration = Math.floor(Math.random() * 3) + 2;
-                if (pIdx !== -1) {
-                    sQ[pIdx].susp = duration;
-                    if (sideData.username) {
-                        db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ susp: duration });
-                    } else {
-                        let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
-                        if (tIdx !== -1) {
-                            db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ susp: duration });
-                        }
-                    }
-                }
-                if (!isAuto) UI.addSimLog(`🟥 طرد (إنذار ثان): [${pName}] وخروج ${duration} جولة`, 'orange');
-                ejectedPlayers[side].push(pName);
-                ratings[side][pName] -= 1.0;
-                matchEvents.push({ time: m, player: pName, type: 'susp', team: side, text: 'طرد (إنذارين)' });
-            }
+            ejectedPlayers[side].push(pName);
+            ratings[side][pName] -= 2.0;
+            let logMsg = hasYellow ? `🟥 طرد (إنذار ثان): [${pName}]` : `🟥 طرد مباشر: [${pName}]`;
+            if(!isAuto) UI.addSimLog(logMsg, 'red');
+            matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
+
+        } else {
+            // حالة الإنذار الأصفر (تأثير لحظي داخل المباراة فقط)
+            ratings[side][pName] -= 0.5;
+            if(!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
+            matchEvents.push({ time: m, player: pName, type: 'yellow', team: side, text: 'إنذار' });
         }
     }
 
 
-
-
-            
-            
                             // منطق التمريرات والتسلل (يحدث كل دقيقة تقريباً)
             let activeSide = Math.random() > stats.a.possession/100 ? 'h' : 'a';
             stats[activeSide].passes += Math.floor(Math.random() * 7) + 3;
@@ -2540,3 +2531,19 @@ setInterval(() => { AutoEngine.checkAndRun(); }, 60000);
 </script>
 </body>
 </html>
+
+
+
+
+
+ملء تشكيلة المدربين بعد حذف المصابين
+تسجيل طرد الكمبيوتر  وعلاجه
+
+تسجيل اصابات المدربين وعلاجها
+تسجيل اصابات الكمبيوتر وعلاجها
+حذف المصابين من الكمبيوتر 
+حذف المطرودين من الكمبيوتر
+
+
+
+
