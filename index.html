@@ -790,7 +790,7 @@ const Engine = {
 
 // --- [كود الكروت المطور ليرسل لفايربيس] ---
 // 1. حساب مخاطر التدخلات العنيفة (الإنذارات والطرود)
-let hRisk = (dataH.tactics?.press === 'aggr' ? 0.5 : 0.3); 
+let hRisk = (dataH.tactics?.press === 'aggr' ? 0.05 : 0.03); 
 if (Math.random() < hRisk) {
     let side = (Math.random() > 0.5 ? 'h' : 'a'); // خليناها 0.5 عشان العدل بين الطرفين
     let sideLineup = (side === 'h' ? lineupH : lineupA);
