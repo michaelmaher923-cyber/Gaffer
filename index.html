@@ -1,3 +1,9 @@
+Gmail	Michael Maher ‏ <michaelmaher923@gmail.com>
+(بدون موضوع)
+Michael Maher ‏ <michaelmaher923@gmail.com>	25 مارس 2026 في 8:21 م
+إلى: maherfakhry47@yahoo.com
+تحت الاختبار
+تعديل مسارات
 
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -598,12 +604,12 @@ const Engine = {
         if (toUser) {
             // لو مدرب حقيقي: نبعت العرض لبريده
             const offerId = Date.now();
-            await db.ref(`users/${toUser}/receivedOffers/${offerId}`).update({
+            await db.ref(`users/${toUser}/receivedOffers/${offerId}`).set({
                 from: APP_STATE.user.team, fromUser: ME, player: playerName,
                 price: offerPrice, status: 'pending', id: offerId, week: currentWeek
             });
-// تسجيل إن المستخدم استهلك عرضه في هذه الجولة
-await db.ref(`users/${ME}`).update({ lastOfferWeek: currentWeek });
+            // تسجيل إن المستخدم استهلك عرضه في هذه الجولة
+            await db.ref(`users/${ME}`).update({ lastOfferWeek: currentWeek });
             alert("تم إرسال العرض لمدرب الفريق.. انتظر رده في البريد.");
         } else {
             // لو كمبيوتر: نخليه يقرر فوراً
@@ -632,7 +638,6 @@ await db.ref(`users/${ME}`).update({ lastOfferWeek: currentWeek });
             // في كل الحالات (قبول أو رفض) يتم تسجيل استهلاك العرض لهذه الجولة
             await db.ref(`users/${ME}`).update({ lastOfferWeek: week });
 
-
             if (accepted) {
                 // تنفيذ البيع فوراً
                 const cleanPlayer = { n: player.n, p: parseInt(player.p), pos: player.pos || "AM" };
@@ -656,44 +661,53 @@ await db.ref(`users/${ME}`).update({ lastOfferWeek: currentWeek });
         if(!isAuto) UI.showSimOverlay(hName, aName);
         this.simSpeed = isAuto ? 0 : 2500; 
         let matchEvents = [];
+        let matchYellowCards = { h: [], a: [] }; 
         const snapH = await db.ref('users').orderByChild('team').equalTo(hName).once('value');
         const snapA = await db.ref('users').orderByChild('team').equalTo(aName).once('value');
         const dataH = Object.values(snapH.val() || {})[0] || this.getCPUTeam(hName);
         const dataA = Object.values(snapA.val() || {})[0] || this.getCPUTeam(aName);
-        // --- 1. تنظيف التشكيلة (طرد المصاب والموقوف) ---
-        [dataH, dataA].forEach(team => {
-            let lineup = team.lineup || {};
-            let squad = Array.isArray(team.squad) ? team.squad : Object.values(team.squad || {});
-            
-            // تحديد الخانات الفاضية بعد الطرد
-            Object.keys(lineup).forEach(slot => {
-                let pName = lineup[slot];
-                let pData = squad.find(p => p.n === pName);
-                if (pData && (pData.susp > 0 || pData.inj > 0)) {
-                    delete lineup[slot]; // الخانة أصبحت متاحة للتعويض
-                }
-            });
+[dataH, dataA].forEach(team => {
+    // 1. التأكد أن التشكيلة Object وليس Null
+    let lineup = team.lineup || {}; 
+    
+    // 2. تحويل الـ Squad لمصفوفة مهما كان شكلها في الـ DB
+    let squad = Array.isArray(team.squad) ? team.squad : Object.values(team.squad || {});
 
-            // --- 2. البحث عن أي لاعب "خارج التشكيلة" وجاهز بدلاً من الفراغات ---
-            let currentPlayersInLineup = Object.values(lineup);
-            
-            // فلترة اللاعبين المتاحين (مش في التشكيلة + مش مصاب + مش موقوف)
-            let availableSubstitutes = squad.filter(p => 
-                !currentPlayersInLineup.includes(p.n) && 
-                (p.susp || 0) === 0 && 
-                (p.inj || 0) === 0
-            );
+    // --- الخطوة 1: تنظيف التشكيلة من المصابين والموقوفين ---
+    // نستخدم for...in عشان نلف على الـ Keys بتاعة الـ Object صح
+    for (let slot in lineup) {
+        let pName = lineup[slot];
+        let pData = squad.find(p => p.n === pName);
+        
+        // لو اللاعب مصاب أو موقوف أو مش موجود أصلاً في القائمة (Squad)
+        if (!pData || (pData.susp || 0) > 0 || (pData.inj || 0) > 0) {
+            console.log(`⚠️ طرد لاعب غير جاهز: ${pName} من خانة ${slot}`);
+            delete lineup[slot]; 
+        }
+    }
 
-            // ملء الخانات الفاضية (من المركز 0 لـ 10)
-            for (let i = 0; i < 11; i++) {
-                if (!lineup[i] && availableSubstitutes.length > 0) {
-                    // سحب أول لاعب متاح ووضعه في الخانة الفاضية
-                    let newPlayer = availableSubstitutes.shift();
-                    lineup[i] = newPlayer.n;
-                    console.log(`♻️ تعويض تلقائي: ${newPlayer.n} دخل بدلاً من لاعب غائب في فريق ${team.team || team.username}`);
-                }
-            }
-        });
+    // --- الخطوة 2: تجهيز البدلاء الجاهزين ---
+    let currentPlayersInLineup = Object.values(lineup);
+    let availableSubstitutes = squad.filter(p => 
+        !currentPlayersInLineup.includes(p.n) && 
+        (p.susp || 0) === 0 && 
+        (p.inj || 0) === 0
+    );
+
+    // --- الخطوة 3: ملء الفراغات من 0 لـ 10 ---
+    for (let i = 0; i < 11; i++) {
+        // التأكد من الخانة فاضية (سواء كانت i رقم أو نص)
+        if (!lineup[i] && !lineup[String(i)] && availableSubstitutes.length > 0) {
+            let newPlayer = availableSubstitutes.shift();
+            lineup[i] = newPlayer.n; 
+            console.log(`♻️ تعويض: ${newPlayer.n} في خانة ${i}`);
+        }
+    }
+    
+    // حفظ التشكيلة المحدثة في الـ Object عشان الماتش يقرأها
+    team.lineup = lineup; 
+});
+
 
 
  
@@ -743,85 +757,99 @@ await db.ref(`users/${ME}`).update({ lastOfferWeek: currentWeek });
                 document.getElementById('sim-timer').innerText = m + ":00";
             }
 
-            // حدث الإصابة
-            if (Math.random() < 0.003) {
-                let side = Math.random() > 0.5 ? 'h' : 'a';
-                let sideLineup = side === 'h' ? lineupH : lineupA;
-                let activeOnPitch = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
-                let pName = activeOnPitch[Math.floor(Math.random() * activeOnPitch.length)];
+// --- كود الأحداث الشامل (إصابة / طرد مباشر / إنذارات) ---
+if (Math.random() < 0.15) { 
+    let side = Math.random() > 0.5 ? 'h' : 'a';
+    let sideLineup = side === 'h' ? lineupH : lineupA;
+    let activeOnPitch = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
+    let pName = activeOnPitch[Math.floor(Math.random() * activeOnPitch.length)];
 
-                if (pName) {
-                    let duration = Math.floor(Math.random() * 3) + 2;
-                    let sideData = side === 'h' ? dataH : dataA;
-                    let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
-                    let pIdx = sQ.findIndex(px => px.n === pName);
-                    if (pIdx !== -1) { 
-    sQ[pIdx].inj = duration; 
-    if (sideData.username) {
-        db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ inj: duration });
-    } else {
-        let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
-        if (tIdx !== -1) {
-            db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ inj: duration });
-        }
-    }
-}
+    if (pName) {
+        let eventRand = Math.random();
 
-                    if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
-                    ejectedPlayers[side].push(pName);
-                    ratings[side][pName] -= 1.0; // خصم من التقييم بسبب الخروج المبكر
-                    matchEvents.push({ time: m, player: pName, type: 'injury', team: side, text: 'إصابة' });
+        // 1. احتمالية الإصابة (3%)
+        if (eventRand < 0.3) {
+            let duration = Math.floor(Math.random() * 3) + 2;
+            let sideData = side === 'h' ? dataH : dataA;
+            let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
+            let pIdx = sQ.findIndex(px => px.n === pName);
+            if (pIdx !== -1) { 
+                sQ[pIdx].inj = duration; 
+                if (sideData.username) {
+                    db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ inj: duration });
+                } else {
+                    let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
+                    if (tIdx !== -1) {
+                        db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ inj: duration });
+                    }
                 }
             }
-
-// --- [كود الكروت المطور ليرسل لفايربيس] ---
-let hRisk = (dataH.tactics?.press === 'aggr' ? 0.04 : 0.015);
-if (Math.random() < hRisk) {
-    let side = (Math.random() > 0.5 ? 'h' : 'a');
-    let sideLineup = (side === 'h' ? lineupH : lineupA);
-    let activePlayers = sideLineup.filter(p => p && !ejectedPlayers[side].includes(p));
-    let pName = activePlayers[Math.floor(Math.random() * activePlayers.length)];
-    
-    if(pName) {
-        let hasYellow = matchEvents.find(e => e.player === pName && e.type === 'yellow' && e.team === side);
-        let isRed = (Math.random() < 0.05 || hasYellow); 
-        
-        if (isRed) {
+            if(!isAuto) UI.addSimLog(`🚑 إصابة: [${pName}] وخروج ${duration} جولة`, 'orange');
             ejectedPlayers[side].push(pName);
-            ratings[side][pName] -= 2.5;
-            if(!isAuto) UI.addSimLog(`🟥 طرد! [${pName}]`, 'red');
-            matchEvents.push({ time: m, player: pName, type: 'red', team: side, text: 'طرد' });
+            ratings[side][pName] -= 1.0;
+            matchEvents.push({ time: m, player: pName, type: 'injury', team: side, text: 'إصابة' });
+        } 
+        
+        // 2. احتمالية الطرد المباشر (1%)
+        else if (eventRand < 0.4) { 
+            let duration = Math.floor(Math.random() * 3) + 2;
+            let sideData = side === 'h' ? dataH : dataA;
+            let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
+            let pIdx = sQ.findIndex(px => px.n === pName);
+            if (pIdx !== -1) { 
+                sQ[pIdx].susp = duration; 
+                if (sideData.username) {
+                    db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ susp: duration });
+                } else {
+                    let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
+                    if (tIdx !== -1) {
+                        db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ susp: duration });
+                    }
+                }
+            }
+            if(!isAuto) UI.addSimLog(`🟥 طرد مباشر: [${pName}] وخروج ${duration} جولة`, 'orange');
+            ejectedPlayers[side].push(pName);
+            ratings[side][pName] -= 1.0;
+            matchEvents.push({ time: m, player: pName, type: 'susp', team: side, text: 'طرد مباشر' });
+        }
 
-            if (!isFriendly) {
-                let sideData = (side === 'h' ? dataH : dataA);
+        // 3. نظام الإنذارات (بقية الـ 15%)
+        else {
+            if (!matchYellowCards[side].includes(pName)) {
+                // إنذار أول 🟨
+                matchYellowCards[side].push(pName);
+                if (!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
+                ratings[side][pName] -= 0.2;
+                matchEvents.push({ time: m, player: pName, type: 'yellow_card', team: side, text: 'إنذار أصفر' });
+            } else {
+                // إنذار ثان = طرد 🟥
+                let duration = Math.floor(Math.random() * 3) + 2;
+                let sideData = side === 'h' ? dataH : dataA;
                 let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
                 let pIdx = sQ.findIndex(px => px.n === pName);
-
-                if(pIdx !== -1) {
-                    sQ[pIdx].susp = 2; // إيقاف لجولة واحدة
-
-                    if (pIdx !== -1) { 
-    sQ[pIdx].susp = 2; 
-    if (sideData.username) {
-        db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ susp: 2 });
-    } else {
-        let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
-        if (tIdx !== -1) {
-            db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ susp: 2 });
-        }
-    }
-}
-
+                if (pIdx !== -1) {
+                    sQ[pIdx].susp = duration;
+                    if (sideData.username) {
+                        db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ susp: duration });
+                    } else {
+                        let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
+                        if (tIdx !== -1) {
+                            db.ref(`league_data/${tIdx}/players/${pIdx}`).update({ susp: duration });
+                        }
+                    }
                 }
+                if (!isAuto) UI.addSimLog(`🟥 طرد (إنذار ثان): [${pName}] وخروج ${duration} جولة`, 'orange');
+                ejectedPlayers[side].push(pName);
+                ratings[side][pName] -= 1.0;
+                matchEvents.push({ time: m, player: pName, type: 'susp', team: side, text: 'طرد (إنذارين)' });
             }
-        } else {
-            // الإنذار الأصفر لا يسجل في قاعدة البيانات (تأثيره لحظي فقط)
-            ratings[side][pName] -= 0.5;
-            if(!isAuto) UI.addSimLog(`🟨 إنذار: [${pName}]`, 'yellow');
-            matchEvents.push({ time: m, player: pName, type: 'yellow', team: side, text: 'إنذار' });
         }
     }
 
+
+
+            
+            
                             // منطق التمريرات والتسلل (يحدث كل دقيقة تقريباً)
             let activeSide = Math.random() > stats.a.possession/100 ? 'h' : 'a';
             stats[activeSide].passes += Math.floor(Math.random() * 7) + 3;
@@ -884,11 +912,8 @@ if (!isFriendly && scorer) {
         sQ[pIdx].goals = (sQ[pIdx].goals || 0) + 1; // زيادة هدف
         // تحديث في الفايربيز (للمستخدمين)
         if (dataH.username) {
-    db.ref(`users/${dataH.username}/squad/${pIdx}`).update({ 
-        goals: sQ[pIdx].goals 
-    });
-}
- else {
+            db.ref(`users/${dataH.username}/squad/${pIdx}/goals`).set(sQ[pIdx].goals);
+        } else {
             // تحديث للكمبيوتر
             let tIdx = APP_STATE.league.findIndex(t => t.name === hName);
             if(tIdx !== -1) db.ref(`league_data/${tIdx}/players/${pIdx}/goals`).set(sQ[pIdx].goals);
@@ -911,11 +936,9 @@ let scorer = this.pickRealisticScorer(lineupA.filter(p => !ejectedPlayers.a.incl
                     if (pIdx !== -1) {
                         sQ[pIdx].goals = (sQ[pIdx].goals || 0) + 1;
                         if (dataA.username) {
-    db.ref(`users/${dataA.username}/squad/${pIdx}`).update({ 
-        goals: sQ[pIdx].goals 
-    });
-}
- else {
+                            // إذا كان المدرب بشرياً
+                            db.ref(`users/${dataA.username}/squad/${pIdx}/goals`).set(sQ[pIdx].goals);
+                        } else {
                             // إذا كان الفريق كمبيوتر
                             let tIdx = APP_STATE.league.findIndex(t => t.name === aName);
                             if(tIdx !== -1) db.ref(`league_data/${tIdx}/players/${pIdx}/goals`).set(sQ[pIdx].goals);
@@ -1147,30 +1170,27 @@ await Admin.updateTeamStatus(dataA.username);
             };
         });
 
-// 2. تحديث إحصائيات المدرب (Stats)
-const userSnap = await db.ref('users').orderByChild('team').equalTo(teamName).once('value');
+        // 2. تحديث إحصائيات المدرب (Stats) - التعديل هنا
+        // البحث عن المستخدم الذي يمتلك هذا الفريق
+        const userSnap = await db.ref('users').orderByChild('team').equalTo(teamName).once('value');
+        
+        if (userSnap.exists()) {
+            const userData = userSnap.val();
+            const uid = Object.keys(userData)[0]; // جلب الـ UID الحقيقي للمستخدم
 
-if (userSnap.exists()) {
-    const userData = userSnap.val();
-    // هنا الـ Key هو اسم المدرب (Username) لأن ده نظام الـ Database عندك
-    const coachUsername = Object.keys(userData)[0]; 
-
-    // التعديل هنا: نستخدم اسم المدرب مباشرة في المسار
-    await db.ref(`users/${coachUsername}/stats`).transaction(st => {
-        st = st || { pts: 0, w: 0, d: 0, l: 0, p: 0 }; // ضفت لك p للمباريات الملعوبة
-        return {
-            pts: (st.pts || 0) + pts,
-            w: (st.w || 0) + w,
-            d: (st.d || 0) + d,
-            l: (st.l || 0) + l,
-            p: (st.p || 0) + 1 // زيادة عدد المباريات الملعوبة
-        };
-    });
-    console.log(`✅ تم تحديث إحصائيات المدرب: ${coachUsername}`);
-} else {
-    console.log(`ℹ️ فريق ${teamName} يتبع الكمبيوتر.`);
-}
-
+            await db.ref(`users/${uid}/stats`).transaction(st => {
+                st = st || { pts: 0, w: 0, d: 0, l: 0 };
+                return {
+                    pts: (st.pts || 0) + pts,
+                    w: (st.w || 0) + w,
+                    d: (st.d || 0) + d,
+                    l: (st.l || 0) + l
+                };
+            });
+            console.log(`✅ تم تحديث إحصائيات المدرب لفريق ${teamName}`);
+        } else {
+            console.log(`ℹ️ فريق ${teamName} يتبع الكمبيوتر، لا يوجد stats لتحديثها.`);
+        }
     };
 
     // توزيع النقاط حسب النتيجة
@@ -1304,38 +1324,21 @@ const AutoEngine = {
                         });
                     }
 
-// 2. تحديث فرق المدربين (users) لخصم جولة من الإصابات والإيقافات
-const usersSnap = await db.ref('users').once('value');
-const users = usersSnap.val();
+                    // 2. تحديث فرق المدربين (users)
+                    const usersSnap = await db.ref('users').once('value');
+                    const users = usersSnap.val();
+                    if (users) {
+                        for (let uid in users) {
+                            let squad = Array.isArray(users[uid].squad) ? users[uid].squad : Object.values(users[uid].squad || {});
+                            squad.forEach((p, pIdx) => {
+                                if (p.inj > 0) updates[`users/${uid}/squad/${pIdx}/inj`] = p.inj - 1;
+                                if (p.susp > 0) updates[`users/${uid}/squad/${pIdx}/susp`] = p.susp - 1;
+                            });
+                        }
+                    }
 
-if (users) {
-    for (let coachName in users) { // هنا coachName هو الـ Key (اسم المدرب)
-        const userEntry = users[coachName];
-        
-        // التأكد إن فيه تشكيلة موجودة للمدرب ده
-        if (userEntry.squad) {
-            let squad = Array.isArray(userEntry.squad) ? userEntry.squad : Object.values(userEntry.squad);
-            
-            squad.forEach((p, pIdx) => {
-                // تقليل مدة الإصابة
-                if (p.inj > 0) {
-                    updates[`users/${coachName}/squad/${pIdx}/inj`] = p.inj - 1;
-                }
-                // تقليل مدة الإيقاف
-                if (p.susp > 0) {
-                    updates[`users/${coachName}/squad/${pIdx}/susp`] = p.susp - 1;
-                }
-            });
-        }
-    }
-}
-
-// تحديث حالة الأسبوع عشان العملية ما تتكررش
-updates[`schedule/${week}/injUpdated`] = true;
-
-// تنفيذ كل التحديثات مرة واحدة (Atomic Update)
-await db.ref().update(updates);
-
+                    updates[`schedule/${week}/injUpdated`] = true;
+                    await db.ref().update(updates);
                 }
                 // --- نهاية التعديل ---
 
@@ -1759,20 +1762,7 @@ showAdmin() {
         const o = snap.val();
         if(!o) return alert("خطأ: العرض غير موجود!");
 
-        // البحث عن بيانات المشتري باستخدام اسمه (Username)
-const buyerSnap = await db.ref('users/' + o.fromUser).once('value');
-
-if (buyerSnap.exists()) {
-    // هنا bKey هو نفسه o.fromUser (اسم المدرب)
-    // و bData هي كل بياناته (الميزانية، الفريق، إلخ)
-    bKey = buyerSnap.key; 
-    bData = buyerSnap.val();
-    
-    console.log(`✅ جلب بيانات المشتري بنجاح: ${bKey}`);
-} else {
-    console.error("❌ فشل العثور على بيانات المشتري في المسار المحدد");
-}
-
+        const buyerSnap = await db.ref('users/' + o.fromUser).once('value');
         let bKey, bData;
 
         if(buyerSnap.exists()) {
@@ -1798,29 +1788,26 @@ if (buyerSnap.exists()) {
         };
 
         const updates = {};
-// 1. تحديث بيانات البائع (المدرب الحالي ME)
-// الأفضل نحدث الميزانية ونمسح اللاعب من مصفوفته
-updates[`users/${ME}/budget`] = (APP_STATE.user.budget || 0) + parseInt(o.price);
-// ملاحظة: فلترة الـ squad هنا بتمسح اللاعب من المصفوفة اللي هتروح للـ DB
-const newSellerSquad = APP_STATE.user.squad.filter(x => x.n !== o.player);
-updates[`users/${ME}/squad`] = newSellerSquad;
+        // 1. حذف اللاعب من البائع وزيادة ميزانيته
+        updates[`users/${ME}/squad`] = APP_STATE.user.squad.filter(x => x.n !== o.player);
+        updates[`users/${ME}/budget`] = APP_STATE.user.budget + parseInt(o.price);
 
-// 2. تحديث بيانات المشتري (bKey هو اسم المدرب المشتري)
-const currentBuyerSquad = Array.isArray(bData.squad) ? bData.squad : Object.values(bData.squad || {});
-updates[`users/${bKey}/squad`] = [...currentBuyerSquad, cleanPlayerData];
-updates[`users/${bKey}/budget`] = (bData.budget || 0) - parseInt(o.price);
+        // 2. إضافة اللاعب للمشتري بشكل مصفوفة نظيفة
+        const currentBuyerSquad = Array.isArray(bData.squad) ? bData.squad : Object.values(bData.squad || {});
+        updates[`users/${bKey}/squad`] = [...currentBuyerSquad, cleanPlayerData];
+        
+        // 3. خصم المبلغ من المشتري وتحديث حالة العرض
+        updates[`users/${bKey}/budget`] = bData.budget - parseInt(o.price);
+        updates[offerPath + '/status'] = 'accepted';
 
-// 3. تحديث حالة العرض
-updates[offerPath + '/status'] = 'accepted';
-
-// 4. تنظيف التشكيلة الأساسية للبائع (Lineup)
-let currentLineup = APP_STATE.user.lineup || {};
-for(let slot in currentLineup) {
-    if(currentLineup[slot] === o.player) {
-        updates[`users/${ME}/lineup/${slot}`] = null;
-    }
-}
-
+        // 4. إزالة اللاعب من التشكيلة الأساسية للبائع إذا كان موجوداً
+        let currentLineup = APP_STATE.user.lineup || {};
+        for(let slot in currentLineup) {
+            if(currentLineup[slot] === o.player) {
+                updates[`users/${ME}/lineup/${slot}`] = null;
+                
+            }
+        }
 
         try {
             await db.ref().update(updates);
@@ -1976,16 +1963,40 @@ if (APP_STATE.user && APP_STATE.user.lineup) {
     }
 
 
-    // تنظيف الكائن من أي "قيم" غير صحيحة (أرقام الخطط مثلاً)
+    if (lineupChanged) {
+        db.ref(`users/${ME}/lineup`).set(currentLineup);
+        console.log("⚠️ تم استبعاد اللاعبين غير الجاهزين من التشكيلة تلقائياً");
+        // مثال لما يجب فعله قبل الحفظ
+let lineupToSave = { ...APP_STATE.myLineup }; 
+delete lineupToSave.formation; // حذف بند الخطة حتى لا يظهر كلاعب
+
+// ثم الحفظ في الفايربيس
+// 1. تنظيف الكائن من أي لاعب اسمه "رقم" قبل الحفظ
 Object.keys(lineupToSave).forEach(slot => {
-    const pName = lineupToSave[slot];
+    const pData = lineupToSave[slot];
     
-    // لو القيمة عبارة عن رقم (زي "433") أو مش موجودة أصلاً، احذفها من الـ Lineup
-    if (!pName || !isNaN(pName) || pName === 'formation') {
+    // إذا كان العنصر يحتوي على اسم (n) وهذا الاسم عبارة عن رقم فقط
+    if (pData && pData.n && !isNaN(pData.n)) {
         delete lineupToSave[slot];
     }
 });
-} 
+
+// 2. الآن الحفظ في قاعدة البيانات وهو "نظيف"
+db.ref(`users/${ME}/lineup`).set(lineupToSave);
+
+
+sortedKeys.forEach(key => {
+    let pName = lineupData[key];
+    
+    // تعديل الشرط ليتجاهل حقل formation وأي أرقام خطط
+    if (pName && key !== 'formation' && isNaN(pName)) { 
+        let rate = (ratings[sideKey] && ratings[sideKey][pName]) ? ratings[sideKey][pName] : 6.0;
+        ratingsList.push({ name: pName, rate: rate });
+    }
+});
+
+    }
+}
 
         const layout = document.getElementById('pitch-layout'); 
         const bar = document.getElementById('formation-bar');
@@ -2385,31 +2396,29 @@ const Admin = {
 
             let updates = {};
 
-        // 1. مسح بيانات المدربين مع الحفاظ على الحسابات الأساسية
-for (let userId in users) { // هنا userId هو الـ Username (مثل "مايكل ماهر")
-    
-    // --- [إضافة تسجيل الإنجاز] ---
-    let userTeam = users[userId].team;
-    let tr = users[userId].trophies || []; // جلب البطولات القديمة إن وجدت
+            // 1. مسح بيانات المدربين مع الحفاظ على الحسابات الأساسية
+            for (let userId in users) {
+                        // --- [إضافة تسجيل الإنجاز] ---
+            let userTeam = users[userId].team;
+            if (userTeam === firstPlace.name) {
+                const tr = users[userId].trophies || [];
+                updates[`/users/${userId}/trophies`] = [...tr, { rank: 1, team: userTeam, date: new Date().toLocaleDateString() }];
+            } else if (userTeam === secondPlace.name) {
+                const tr = users[userId].trophies || [];
+                updates[`/users/${userId}/trophies`] = [...tr, { rank: 2, team: userTeam, date: new Date().toLocaleDateString() }];
+            }
+            // ----------------------------
 
-    if (userTeam === firstPlace.name) {
-        updates[`/users/${userId}/trophies`] = [...tr, { rank: 1, team: userTeam, date: new Date().toLocaleDateString() }];
-    } else if (userTeam === secondPlace.name) {
-        updates[`/users/${userId}/trophies`] = [...tr, { rank: 2, team: userTeam, date: new Date().toLocaleDateString() }];
-    }
-    // ----------------------------
-
-    // تصحيح المسارات لتطابق ما استخدمناه سابقاً (CamelCase)
-    updates[`/users/${userId}/budget`] = 100000000;   
-    updates[`/users/${userId}/lastFriendlyWeek`] = null; // حرف l صغير
-    updates[`/users/${userId}/team`] = "بدون فريق";
-    updates[`/users/${userId}/lastTrainDay`] = null;    // حرف l صغير
-    updates[`/users/${userId}/receivedOffers`] = null;  // حرف r صغير
-    updates[`/users/${userId}/specialists`] = null;    // حرف s صغير
-    updates[`/users/${userId}/tactics`] = null; 
-    updates[`/users/${userId}/squad`] = null; 
-    updates[`/users/${userId}/lineup`] = null; 
-}
+                updates[`/users/${userId}/budget`] = 100000000;   
+                updates[`/users/${userId}/LastFriendlyWeek`] = null; 
+                updates[`/users/${userId}/team`] = "بدون فريق";
+                updates[`/users/${userId}/LastTrainDay`] = null; 
+                updates[`/users/${userId}/ReceivedOffers`] = null; 
+                updates[`/users/${userId}/Specialists`] = null; 
+                updates[`/users/${userId}/tactics`] = null; 
+                updates[`/users/${userId}/squad`] = null; 
+                updates[`/users/${userId}/lineup`] = null; 
+            }
 
             // 2. مسح الفرق المحجوزة لفتح المجال لاختيار فرق جديدة
             updates[`/taken_teams`] = null; 
@@ -2535,5 +2544,3 @@ setInterval(() => { AutoEngine.checkAndRun(); }, 60000);
 </script>
 </body>
 </html>
-
-
