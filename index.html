@@ -766,16 +766,17 @@ if (Math.random() < 0.15) {
 
     if (pName) {
         let eventRand = Math.random();
+        let sideData = side === 'h' ? dataH : dataA;
+        let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
+        let pIdx = sQ.findIndex(px => px.n === pName);
 
-        // 1. احتمالية الإصابة (3%)
-        if (eventRand < 0.3) {
+        // 1. حالة الإصابة (3%)
+        if (eventRand < 0.03) {
             let duration = Math.floor(Math.random() * 3) + 2;
-            let sideData = side === 'h' ? dataH : dataA;
-            let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
-            let pIdx = sQ.findIndex(px => px.n === pName);
             if (pIdx !== -1) { 
                 sQ[pIdx].inj = duration; 
                 if (sideData.username) {
+                    // السطر ده هو اللي كان شغال عندك للإصابة
                     db.ref(`users/${sideData.username}/squad/${pIdx}`).update({ inj: duration });
                 } else {
                     let tIdx = APP_STATE.league.findIndex(t => t.name === (side === 'h' ? hName : aName));
@@ -790,12 +791,9 @@ if (Math.random() < 0.15) {
             matchEvents.push({ time: m, player: pName, type: 'injury', team: side, text: 'إصابة' });
         } 
         
-        // 2. احتمالية الطرد المباشر (1%)
-        else if (eventRand < 0.4) { 
+        // 2. حالة الطرد المباشر (1%)
+        else if (eventRand < 0.04) { 
             let duration = Math.floor(Math.random() * 3) + 2;
-            let sideData = side === 'h' ? dataH : dataA;
-            let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
-            let pIdx = sQ.findIndex(px => px.n === pName);
             if (pIdx !== -1) { 
                 sQ[pIdx].susp = duration; 
                 if (sideData.username) {
@@ -824,9 +822,6 @@ if (Math.random() < 0.15) {
             } else {
                 // إنذار ثان = طرد 🟥
                 let duration = Math.floor(Math.random() * 3) + 2;
-                let sideData = side === 'h' ? dataH : dataA;
-                let sQ = Array.isArray(sideData.squad) ? sideData.squad : Object.values(sideData.squad || {});
-                let pIdx = sQ.findIndex(px => px.n === pName);
                 if (pIdx !== -1) {
                     sQ[pIdx].susp = duration;
                     if (sideData.username) {
@@ -845,6 +840,7 @@ if (Math.random() < 0.15) {
             }
         }
     }
+
 
 
 
