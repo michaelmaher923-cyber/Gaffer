@@ -280,9 +280,18 @@
         <button onclick="Engine.togglePressView('menu')" style="background:none; border:none; cursor:pointer; font-weight:bold; margin-bottom:15px; color:#111; font-family:'Amiri', serif;">⬅️ العودة للقائمة</button>
         <div style="background:#fff; padding:25px; border:2px solid #333; box-shadow: 10px 10px 20px rgba(0,0,0,0.2);">
             <input type="text" id="press-title" placeholder="عنوان الخبر الرئيسي..." style="width:100%; padding:15px; background:#fff; border:none; border-bottom:2px solid #333; font-size:22px; font-weight:bold; color:#000 !important; outline:none; margin-bottom:15px; font-family:'Amiri', serif;">
-            <textarea id="press-input" placeholder="اكتب تفاصيل الملحمة هنا..." style="width:100%; height:300px; background:#fff; border:none; border-bottom:1px dashed #333; padding:10px; font-size:17px; line-height:1.8; color:#000 !important; outline:none; resize:none; font-family:'Amiri', serif;"></textarea>
+            
+            <textarea id="coach-comment" maxlength="80" placeholder="🎤 ضع بصمتك هنا.. تصريحك الفني (80 حرف بحد أقصى)" style="width:100%; height:70px; background:#fffef2; border:1px solid #8b0000; padding:10px; font-size:16px; color:#8b0000 !important; outline:none; resize:none; font-family:'Amiri', serif; margin-bottom:10px;"></textarea>
+            <div style="text-align:left; font-size:12px; color:#8b0000; margin-top:-5px; margin-bottom:10px;">
+    <span id="char-count">0</span>/80 حرف
+</div>
+
+            <textarea id="press-input" readonly placeholder="اضغط على زر (توليد آلي) بالأسفل لكتابة التقرير الرسمي للمباراة..." style="width:100%; height:250px; background:#f9f9f9; border:none; border-bottom:1px dashed #333; padding:10px; font-size:17px; line-height:1.8; color:#444 !important; outline:none; resize:none; font-family:'Amiri', serif;"></textarea>
+            
+            <div id="press-error" style="display:none; color:red; font-size:13px; margin:10px 0;"></div>
+
             <div style="display:flex; gap:15px; margin-top:20px;">
-                <button onclick="Engine.postPress()" style="flex:2; background:#111; color:#fff; height:55px; font-weight:bold; cursor:pointer; border:none; font-family:'Amiri', serif; font-size:18px;">نشر الآن ✉️</button>
+                <button id="publish-btn" onclick="Engine.postPress()" style="flex:2; background:#111; color:#fff; height:55px; font-weight:bold; cursor:pointer; border:none; font-family:'Amiri', serif; font-size:18px;">نشر الآن ✉️</button>
                 <button onclick="Engine.generateAutoNews()" style="flex:1; background:#8b0000; color:#fff; font-size:13px; cursor:pointer; border:none; font-family:'Amiri', serif;">توليد آلي 🤖</button>
             </div>
         </div>
@@ -290,80 +299,28 @@
 
     <div id="press-read-zone" style="display:none;">
         <button onclick="Engine.togglePressView('menu')" style="background:none; border:none; cursor:pointer; font-weight:bold; margin-bottom:20px; color:#111; font-family:'Amiri', serif;">⬅️ العودة للقائمة</button>
-        
         <div id="press-feed"></div>
     </div>
 
     <style>
-        /* أهم جزء: الـ CSS اللي بيجيب "الخامة" */
-        @import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700;900&display=swap'); /* خط كلاسيكي */
-
-        .antique-paper {
-            background: #fffef2 !important; /* لون ورقة الجرنال القديمة */
-            padding: 40px;
+        @import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700;900&display=swap');
+        .live-paper {
+            background: #fffef2 !important;
+            padding: 30px;
             border: 1px solid #dcd5c5;
-            margin-bottom: 50px;
-            color: #000 !important; /* خط أسود صريح للمانشيتات */
-            box-shadow: 2px 10px 30px rgba(0,0,0,0.4);
-            position: relative;
-            background-image: url('https://www.transparenttextures.com/patterns/paper-fibers.png'); /* ملمس ألياف الورق */
-            transform: rotate(-0.3deg); /* ميلان بسيط كأنه جرنال مرصوص عشوائياً */
-            transition: 0.3s ease-out;
-            border-radius: 2px;
+            margin-bottom: 30px;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
+            color: #000;
+            text-align: right;
+            background-image: url('https://www.transparenttextures.com/patterns/paper-fibers.png');
         }
-        .antique-paper:hover { transform: rotate(0deg); } /* يتعدل لما تقف عليه */
-
-        /* المانشيت الرئيسي (خط ضخم وعريض زي الأهرام) */
-        .paper-main-title { 
-            font-family: 'Amiri', serif; 
-            font-size: 38px; 
-            margin: 5px 0 15px; 
-            text-align: center; 
-            border-bottom: 3px double #000; 
-            color: #000 !important; 
-            font-weight: 900; 
-            line-height: 1.1;
-        }
-        
-        /* بيانات المراجعة (تاريخ ورقم العدد) */
-        .paper-meta-zone {
-            display: flex;
-            justify-content: space-between;
-            border-top: 1px solid #000;
-            border-bottom: 1px solid #000;
-            padding: 8px 0;
-            font-size: 13px;
-            font-weight: bold;
-            color: #111 !important;
-            margin-bottom: 25px;
-            font-family: serif;
-            background: rgba(0,0,0,0.03); /* تظليل خفيف */
-        }
-
-        /* تنسيق الأعمدة الصارم للأخبار (قراءتها بتبدأ من العمود اليمين للشمال) */
-        .paper-columns { 
-            column-count: 2; /* تنسيق عمودين صارم زي الجرنال اللي في الصورة */
-            column-gap: 30px; 
-            column-rule: 1px solid #ddd; /* خط فاصل بين العمودين */
-            text-align: justify; 
-            color: #111 !important;
-            font-family: 'Times New Roman', serif; /* خط القراءة الكلاسيكي */
-            font-size: 16px; 
-            line-height: 1.9; /* مسافة بين السطور تريح العين */
-        }
-        
-        .paper-columns p { 
-            margin-bottom: 15px; 
-            text-indent: 15px; /* مسافة بداية الفقرة */
-            color: #111 !important;
-        }
-
-        /* إخفاء أسماء الجرائد الأصلية */
-        .paper-main-title::before { content: "جريدة النادي اليومية: "; font-size: 12px; font-weight: bold; }
-
-        @media (max-width: 800px) { .paper-columns { column-count: 1; } } /* عمود واحد للموبايل */
+        .paper-header h1 { font-family: 'Amiri', serif; font-size: 28px; text-align: center; border-bottom: 3px double #000; margin: 15px 0; font-weight: 900; color: #000; }
+        .paper-meta { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 15px; }
+        .paper-body { column-count: 2; column-gap: 20px; text-align: justify; font-size: 16px; line-height: 1.7; font-family: serif; color: #111; }
+        @media (max-width: 600px) { .paper-body { column-count: 1; } }
     </style>
 </section>
+
 
 
 
@@ -1096,22 +1053,48 @@ async generateAutoNews() {
 // دالة النشر
 async postPress() {
     const title = document.getElementById('press-title').value.trim();
-    const msg = document.getElementById('press-input').value.trim();
-    if (!title || !msg) return alert("اكمل البيانات أولاً!");
+    const autoMsg = document.getElementById('press-input').value.trim(); // الخبر المولد
+    const coachComment = document.getElementById('coach-comment').value.trim(); // تصريح المدرب (الـ 80 حرف)
+    const today = new Date().toLocaleDateString('ar-EG');
 
-    await db.ref('News').push({
-        team: APP_STATE.user.team,
-        title: title,
-        msg: msg,
-        time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
-        date: new Date().toLocaleDateString('ar-EG')
-    });
+    // 1. التحقق من وجود البيانات الأساسية
+    if (!title || !autoMsg) return alert("برجاء توليد الخبر أولاً وكتابة العنوان!");
 
-    document.getElementById('press-title').value = "";
-    document.getElementById('press-input').value = "";
-    alert("تم النشر بنجاح!");
-    this.togglePressView('menu');
-},
+    // 2. التحقق من قيود النشر (خبر واحد في اليوم)
+    if (APP_STATE.user.lastPressDate === today) {
+        return alert("⚠️ مسموح بنشر خبر واحد فقط يومياً!");
+    }
+
+    // 3. دمج تصريح المدرب مع متن الخبر المولد
+    const finalMsg = coachComment ? `🎤 تصريح المدرب: "${coachComment}"\n\n${autoMsg}` : autoMsg;
+
+    try {
+        // 4. إرسال الخبر المدمج لقاعدة البيانات
+        await db.ref('News').push({
+            team: APP_STATE.user.team,
+            title: title,
+            msg: finalMsg, // بنبعت النص الكامل هنا
+            time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
+            date: today
+        });
+
+        // 5. تحديث تاريخ النشر لمنع التكرار
+        await db.ref(`users/${ME}/lastPressDate`).set(today);
+        APP_STATE.user.lastPressDate = today;
+
+        // 6. تنظيف الخانات والعودة للمنيو
+        document.getElementById('press-title').value = "";
+        document.getElementById('press-input').value = "";
+        document.getElementById('coach-comment').value = "";
+        
+        alert("✅ تم نشر الخبر وتصريحك بنجاح!");
+        this.togglePressView('menu');
+        
+    } catch (e) {
+        alert("حدث خطأ أثناء النشر، حاول مرة أخرى!");
+    }
+}, 
+
 
 // دالة الرؤية
 loadPress() {
@@ -1678,42 +1661,35 @@ await Admin.updateTeamStatus(dataA.username);
 
     // 1. دالة النشر اليدوي مع القيود
 async postPress() {
+    // 1. بنسحب العنوان
     const title = document.getElementById('press-title').value.trim();
-    const msg = document.getElementById('press-input').value.trim();
-    const errorMsg = document.getElementById('press-error');
-    
-    // اليوم الحالي للتأكد من خبر واحد يومياً
-    const today = new Date().toLocaleDateString('en-GB'); // شكل: 04/04/2026
+    // 2. بنسحب الخبر المولد (الآلي)
+    const autoMsg = document.getElementById('press-input').value.trim();
+    // 3. بنسحب (تصريح المدرب) من المربع الجديد - ده السطر اللي كان ناقصك
+    const coachComment = document.getElementById('coach-comment').value.trim();
 
-    // التحقق من القيود
-    if (!title || !msg) return alert("برجاء ملء العنوان والتفاصيل!");
-    if (msg.length < 120) {
-        errorMsg.innerText = `⚠️ الخبر قصير جداً (${msg.length}/120 حرف).`;
-        errorMsg.style.display = "block";
-        return;
-    }
-    if (APP_STATE.user.lastPressDate === today) {
-        return alert("⚠️ مسموح بنشر خبر واحد فقط يومياً!");
-    }
+    if (!title || !autoMsg) return alert("اكمل البيانات أولاً!");
 
-    // النشر
+    // --- 4. السطر ده هو "الدمج" اللي بيخليه يظهر في الجريدة ---
+    // لو المدرب كاتب كلام، بنحطه فوق الخبر.. لو مش كاتب، بننشر الخبر بس
+    const finalMsg = coachComment ? `🎤 تصريح المدرب: "${coachComment}"\n\n${autoMsg}` : autoMsg;
+
     await db.ref('News').push({
         team: APP_STATE.user.team,
         title: title,
-        msg: msg,
+        msg: finalMsg, // بنبعت الـ finalMsg (المدمج) مش الـ msg القديم
         time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
-        date: today
+        date: new Date().toLocaleDateString('ar-EG')
     });
 
-    // تحديث تاريخ آخر نشر للمدرب
-    await db.ref(`users/${ME}/lastPressDate`).set(today);
-
-    // تنظيف الخانات
+    // تنظيف كل الخانات بعد النشر
     document.getElementById('press-title').value = "";
     document.getElementById('press-input').value = "";
-    errorMsg.style.display = "none";
-    alert("✅ تم نشر الخبر في الصحافة بنجاح!");
-},
+    document.getElementById('coach-comment').value = ""; // تصفير خانة المدرب
+    
+    alert("تم النشر بنجاح مع تصريحك!");
+    this.togglePressView('menu');
+}, 
 
 // 2. دالة توليد خبر تلقائي بناءً على آخر مباراة
 async generateAutoNews() {
@@ -3152,6 +3128,19 @@ Engine.loadPress = function() {
 
 // --- 2. تشغيل الدالة فوراً عند تحميل الصفحة ---
 Engine.loadPress();
+// دالة مراقبة الكتابة وتحديث العداد
+document.getElementById('coach-comment').addEventListener('input', function() {
+    const limit = 80;
+    const current = this.value.length;
+    const countElement = document.getElementById('char-count');
+    
+    if (countElement) {
+        countElement.innerText = current;
+        // تغيير اللون للأحمر لو وصل للنهاية
+        countElement.style.color = current >= limit ? "red" : "#8b0000";
+    }
+});
+
 </script>
 </body>
 </html>
@@ -3167,6 +3156,6 @@ Engine.loadPress();
 تسجيل اصابات الكمبيوتر وعلاجها
 حذف المصابين من الكمبيوتر 
 حذف المطرودين من الكمبيوتر
-غرفة صحافة يدوية وتلقائية
+غرفة صحافة يدوية وتلقائية مقيدة
 
 
