@@ -1,9 +1,4 @@
-Gmail	Michael Maher ‏ <michaelmaher923@gmail.com>
-(بدون موضوع)
-Michael Maher ‏ <michaelmaher923@gmail.com>	25 مارس 2026 في 8:21 م
-إلى: maherfakhry47@yahoo.com
-تحت الاختبار
-تعديل مسارات
+
 
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -271,14 +266,11 @@ Michael Maher ‏ <michaelmaher923@gmail.com>	25 مارس 2026 في 8:21 م
                     <div id="transfer-market-list"></div>
                 </div>
             </section>
-           <section id="pg-press" class="page-content" style="display:none; padding:25px;">
-    <div class="content-card" style="border: none; background: transparent;">
-        <h2 style="color:var(--gold); font-family:'Orbitron'; text-align:center; margin-bottom:20px;">
-            <i class="fas fa-broadcast-tower"></i> مركز الأخبار العاجلة
-        </h2>
-        <div id="press-feed" style="height: calc(100vh - 200px); overflow-y:auto; padding: 10px;">
-            <p style="text-align:center; color:#555;">جاري رصد آخر تحركات الدوري...</p>
-        </div>
+        <section id="pg-press" class="page-content" style="display:none; padding:25px;">
+    <div class="content-card">
+        <h3>أخبار الدوري والغرفة الصحفية</h3>
+        <div id="press-feed" style="height:400px; overflow-y:auto; margin-bottom:10px; background: #1a1a1a; padding: 10px; border-radius: 8px;">
+            </div>
     </div>
 </section>
 
@@ -790,7 +782,7 @@ const Engine = {
 
 // --- [كود الكروت المطور ليرسل لفايربيس] ---
 // 1. حساب مخاطر التدخلات العنيفة (الإنذارات والطرود)
-let hRisk = (dataH.tactics?.press === 'aggr' ? 0.05 : 0.03); 
+let hRisk = (dataH.tactics?.press === 'aggr' ? 0.5 : 0.3); 
 if (Math.random() < hRisk) {
     let side = (Math.random() > 0.5 ? 'h' : 'a'); // خليناها 0.5 عشان العدل بين الطرفين
     let sideLineup = (side === 'h' ? lineupH : lineupA);
@@ -957,7 +949,7 @@ let scorer = this.pickRealisticScorer(lineupA.filter(p => !ejectedPlayers.a.incl
         // تحديث قاعدة البيانات
         if (!isFriendly) {
             await this.updateTable(hName, aName, sh, sa);
-    
+    await this.postMatchNews(hName, aName, sh, sa, matchEvents);
             await Admin.updateTeamStatus(dataH.username);
             await Admin.updateTeamStatus(dataA.username);
             for (let week in APP_STATE.schedule) {
@@ -1195,7 +1187,36 @@ await Admin.updateTeamStatus(dataA.username);
 }, 
 
 
-   
+ loadPress() {
+    const pressFeed = document.getElementById('press-feed');
+    if (!pressFeed) return;
+
+    // جلب البيانات من فايبربيس
+    db.ref('News').on('value', (snapshot) => {
+        const data = snapshot.val();
+        let content = "";
+
+        if (data) {
+            // تحويل البيانات لمصفوفة وعرضها (الأحدث فوق)
+            Object.values(data).reverse().forEach(news => {
+                content += `
+                    <div style="border-bottom: 1px solid #222; padding: 12px; margin-bottom: 8px; background: #222; border-radius: 5px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <span style="color: #d4af37; font-weight: bold; font-size: 14px;">📢 ${news.team}</span>
+                            <span style="color: #666; font-size: 11px;">${news.time}</span>
+                        </div>
+                        <p style="margin: 0; color: #fff; font-size: 13px; line-height: 1.5; white-space: pre-line;">${news.msg}</p>
+                    </div>`;
+            });
+        } else {
+            content = "<div style='text-align:center; color:#555; margin-top:50px;'>لا توجد أخبار رسمية حالياً</div>";
+        }
+        
+        pressFeed.innerHTML = content;
+    });
+},
+
+
 
     async saveTactics() {
         const tac = {
@@ -1413,7 +1434,6 @@ showAdmin() {
         if(id === 'matches') this.renderMatches();
         if(id === 'transfers') this.renderTransfers();
         if(id === 'press') this.renderPress();
-        PressSystem.listen();
     },
         async showTeamDetails(teamName) {
         const snap = await db.ref('users').orderByChild('team').equalTo(teamName).once('value');
@@ -1541,7 +1561,32 @@ showAdmin() {
     this.modal(h);
 },
 
+    // دالة لتوليد ونشر الخبر تلقائياً
+async postMatchNews(hName, aName, sh, sa, events) {
+    // جلب مسجلي الأهداف من الأحداث
+    const goalsH = events.filter(e => e.team === 'h' && e.type === 'goal').map(e => e.player);
+    const goalsA = events.filter(e => e.team === 'a' && e.type === 'goal').map(e => e.player);
+
+    let resultEmoji = sh > sa ? "🔥 فوز مستحق" : (sa > sh ? "🚀 انتصار خارجي" : "🤝 تعادل مثير");
     
+    let msg = `
+        ${resultEmoji}
+        🏟️ ${hName} [ ${sh} - ${sa} ] ${aName}
+        --------------------------------
+        ⚽ أهداف ${hName}: ${goalsH.length > 0 ? goalsH.join('، ') : 'لا يوجد'}
+        ⚽ أهداف ${aName}: ${goalsA.length > 0 ? goalsA.join('، ') : 'لا يوجد'}
+        --------------------------------
+        🏁 انتهت المباراة بصفارة الحكم الرسمية.
+    `.trim();
+
+    // النشر في عقدة News في Firebase
+    await db.ref('News').push({
+        team: "غرفة النتائج",
+        msg: msg,
+        time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+    });
+}, 
+
     async showLeagueStats() {
         this.modal("<h4 style='color:var(--gold)'>جاري تجميع بيانات الدوري...</h4>");
         
@@ -1795,12 +1840,6 @@ showAdmin() {
 
         try {
             await db.ref().update(updates);
-            db.ref('News').push({
-    user: "سوق الانتقالات",
-    msg: `🚨 رسمياً: النجم [${o.player}] يغادر [${o.from}] وينضم لصفوف [${APP_STATE.user.team}] في صفقة قيمتها ${parseInt(o.price).toLocaleString()}$`,
-    time: new Date().toLocaleTimeString('ar-EG')
-});
-
             alert(`تمت الصفقة! ${o.player} انتقل بنجاح بقوة ${cleanPlayerData.p}`);
         } catch(e) {
             alert("فشلت العملية: " + e.message);
@@ -2546,7 +2585,6 @@ setInterval(() => { AutoEngine.checkAndRun(); }, 60000);
 تسجيل اصابات الكمبيوتر وعلاجها
 حذف المصابين من الكمبيوتر 
 حذف المطرودين من الكمبيوتر
-
 
 
 
