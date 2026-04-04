@@ -266,28 +266,119 @@
                     <div id="transfer-market-list"></div>
                 </div>
             </section>
-            <section id="pg-press" class="page-content" style="display:none; padding:20px; direction:rtl;">
-    <div class="content-card" style="background:#111; border:1px solid #333;">
-        <h2 style="color:var(--gold); text-align:center; margin-bottom:20px;">🎤 المركز الإعلامي</h2>
-        
-        <div style="background:#1a1a1a; padding:15px; border-radius:10px; margin-bottom:20px; border:1px solid #222;">
-            <input type="text" id="press-title" placeholder="عنوان الخبر (مثلاً: تصريحات نارية بعد القمة)" 
-                style="width:100%; padding:10px; background:#000; color:var(--gold); border:1px solid #333; border-radius:5px; margin-bottom:10px;">
-            
-            <textarea id="press-input" placeholder="اكتب تفاصيل الخبر هنا (يجب أن لا يقل عن 120 حرف)..." 
-                style="width:100%; height:120px; background:#000; color:#fff; border:1px solid #333; border-radius:5px; padding:10px; resize:none;"></textarea>
-            
-            <div style="display:flex; justify-content:space-between; margin-top:10px; gap:10px;">
-                <button class="btn-gold" onclick="Engine.postPress()" style="flex:2;">نشر الخبر الرسمي</button>
-                <button class="btn-gold" onclick="Engine.generateAutoNews()" style="flex:1; background:var(--blue); font-size:11px;">توليد خبر تلقائي 🤖</button>
-            </div>
-            <p id="press-error" style="color:red; font-size:11px; margin-top:5px; display:none;"></p>
+          <section id="pg-press" class="page-content" style="display:none; padding:25px; background:#dcd5c5; background-image: url('https://www.transparenttextures.com/patterns/pinstriped-suit.png');">
+    
+    <div id="press-main-menu" style="text-align:center; padding:50px 20px;">
+        <h1 style="font-family:'Amiri', serif; font-size:35px; color:#111; margin-bottom:30px; border-bottom:4px double #000; display:inline-block; padding:0 30px; line-height:1.2;">🗞️ مطبعة النادي</h1>
+        <div style="display:flex; flex-direction:column; gap:20px; max-width:400px; margin:0 auto;">
+            <button onclick="Engine.togglePressView('write')" style="padding:20px; background:#111; color:#fff; font-weight:bold; border:none; cursor:pointer; font-size:18px; font-family:'Amiri', serif; box-shadow: 4px 4px 0 #8b0000; transition:0.2s;">🖋️ تحرير ونشر خبر جديد</button>
+            <button onclick="Engine.togglePressView('read')" style="padding:20px; background:#f4f1ea; color:#111; font-weight:bold; border:2px solid #111; cursor:pointer; font-size:18px; font-family:'Amiri', serif; box-shadow: 4px 4px 0 #333; transition:0.2s;">🗞️ تصفح جريدة اليوم</button>
         </div>
-
-        <div id="press-feed" style="max-height:500px; overflow-y:auto; padding:5px;">
-            </div>
     </div>
+
+    <div id="press-write-zone" style="display:none;">
+        <button onclick="Engine.togglePressView('menu')" style="background:none; border:none; cursor:pointer; font-weight:bold; margin-bottom:15px; color:#111; font-family:'Amiri', serif;">⬅️ العودة للقائمة</button>
+        <div style="background:#fff; padding:25px; border:2px solid #333; box-shadow: 10px 10px 20px rgba(0,0,0,0.2);">
+            <input type="text" id="press-title" placeholder="عنوان الخبر الرئيسي..." style="width:100%; padding:15px; background:#fff; border:none; border-bottom:2px solid #333; font-size:22px; font-weight:bold; color:#000 !important; outline:none; margin-bottom:15px; font-family:'Amiri', serif;">
+            <textarea id="press-input" placeholder="اكتب تفاصيل الملحمة هنا..." style="width:100%; height:300px; background:#fff; border:none; border-bottom:1px dashed #333; padding:10px; font-size:17px; line-height:1.8; color:#000 !important; outline:none; resize:none; font-family:'Amiri', serif;"></textarea>
+            <div style="display:flex; gap:15px; margin-top:20px;">
+                <button onclick="Engine.postPress()" style="flex:2; background:#111; color:#fff; height:55px; font-weight:bold; cursor:pointer; border:none; font-family:'Amiri', serif; font-size:18px;">نشر الآن ✉️</button>
+                <button onclick="Engine.generateAutoNews()" style="flex:1; background:#8b0000; color:#fff; font-size:13px; cursor:pointer; border:none; font-family:'Amiri', serif;">توليد آلي 🤖</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="press-read-zone" style="display:none;">
+        <button onclick="Engine.togglePressView('menu')" style="background:none; border:none; cursor:pointer; font-weight:bold; margin-bottom:20px; color:#111; font-family:'Amiri', serif;">⬅️ العودة للقائمة</button>
+        
+        <div id="press-feed"></div>
+    </div>
+
+    <style>
+@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700;900&display=swap');
+
+.newspaper-container {
+    background: #fdfaf0 !important; /* لون الورق القديم */
+    padding: 15px;
+    border: 1px solid #d1c7ac;
+    font-family: 'Amiri', serif;
+    color: #111 !important;
+    max-width: 900px;
+    margin: 10px auto;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+}
+
+.newspaper-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #111;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.header-center {
+    font-size: 45px; /* حجم كلمة الأهرام */
+    font-weight: 900;
+}
+
+.main-headline {
+    font-size: 38px;
+    font-weight: 900;
+    text-align: center;
+    line-height: 1.1;
+    margin: 15px 0;
+    color: #000 !important;
+    border-bottom: 1px solid #111;
+    padding-bottom: 10px;
+}
+
+.main-section {
+    display: flex; /* عشان الصورة تبقى جنب الكلام */
+    gap: 20px;
+}
+
+.news-image {
+    flex: 1;
+    max-width: 200px;
+}
+
+.news-image img {
+    width: 100%;
+    border: 1px solid #111;
+    filter: grayscale(100%) contrast(120%); /* خليها أبيض واسود زي الجرنال القديم */
+}
+
+.caption { font-size: 11px; text-align: center; font-style: italic; }
+
+.news-columns {
+    flex: 2;
+    column-count: 2; /* أعمدة حقيقية */
+    column-gap: 20px;
+    column-rule: 1px solid #ddd;
+    text-align: justify;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.side-brief {
+    margin-top: 15px;
+    border-top: 2px solid #111;
+    padding-top: 5px;
+    column-count: 3; /* أخبار صغيرة تحت */
+    font-size: 12px;
+}
+</style>
+
 </section>
+
+
+
+
+
+
 
 <section id="pg-tactics" class="page-content" style="display:none; padding:25px; overflow-y:auto; height:100%;">
     <div class="content-card">
@@ -519,28 +610,306 @@ const Core = {
         }
     },
 // تأكد أن هذه الدالة موجودة ومستدعاة
+// 1. دالة العرض بتنسيق الجرنال
+// دالة عرض الأرشيف
 loadPress() {
     const pressFeed = document.getElementById('press-feed');
     if (!pressFeed) return;
-
-    // كلمة .on هي السر.. تعني "راقب التغييرات فور حدوثها"
     db.ref('News').on('value', (snapshot) => {
         const data = snapshot.val();
         let html = "";
         if (data) {
             Object.values(data).reverse().forEach(news => {
                 html += `
-                    <div style="background:#222; margin-bottom:10px; padding:10px; border-radius:5px;">
-                        <strong style="color:gold;">${news.team}</strong>
-                        <p style="margin:5px 0; color:#fff;">${news.msg}</p>
-                        <small style="color:#666;">${news.time}</small>
-                    </div>`;
+                <article class="live-paper">
+                    <div class="paper-header">
+                        <small>إصدار خاص • قسم التحليل الرياضي • ${news.time}</small>
+                        <h1>${news.title}</h1>
+                    <div class="newspaper-container">
+    <div class="newspaper-header">
+        <div class="header-side">41 صفحة<br>75 قرشاً</div>
+        <div class="header-center">جريدة النادي</div>
+        <div class="header-side">الطبعة الأولى<br>الثلاثاء 4 أبريل 2026</div>
+    </div>
+
+    <div class="newspaper-body">
+        <h1 class="main-headline" id="h-title">عنوان الملحمة الكروية هنا</h1>
+
+        <div class="main-section">
+            <div class="news-image">
+                <img src="https://via.placeholder.com/200x150?text=Match+Photo" alt="Match">
+                <p class="caption">لقطة من داخل المعركة الكروية اليوم</p>
+            </div>
+
+            <div class="news-columns" id="h-content">
+                </div>
+        </div>
+        
+        <div class="side-brief">
+            <h3>بقلم: المدرب</h3>
+            <p>المباراة كانت اختباراً حقيقياً للروح القتالية، ولم نخذل الجماهير التي حضرت.</p>
+        </div>
+    </div>
+</div>
+
+                    <div class="paper-body">${news.msg.split('\n').map(p => p.trim() !== '' ? `<p>${p}</p>` : '').join('')}</div>
+                </article>`;
             });
         }
         pressFeed.innerHTML = html;
     });
-}
-, 
+},
+
+// دالة التوليد العميق (التحليل الشامل)
+async generateAutoNews() {
+    const myTeam = APP_STATE.user.team;
+    let m = null;
+    const schedule = APP_STATE.schedule;
+    
+    // البحث عن أحدث مباراة مكتملة
+    const rounds = Object.keys(schedule).sort((a,b) => parseInt(b.split('_')[1]) - parseInt(a.split('_')[1]));
+    for (let r of rounds) {
+        m = (schedule[r].matches || []).find(x => x.done && (x.h === myTeam || x.a === myTeam));
+        if (m) break;
+    }
+
+    if (!m) return alert("المطبعة تعتذر.. لم نجد بيانات لمباراتك الأخيرة!");
+
+    const isH = m.h === myTeam;
+    const myS = isH ? m.scoreH : m.scoreA;
+    const opS = isH ? m.scoreA : m.scoreH;
+    const opN = isH ? m.a : m.h;
+
+    // --- منطقة الصيد: تفكيك مصفوفة الـ events ---
+    const ev = m.events || [];
+    let myGoalsList = [];
+    let myInjuriesList = [];
+    let myRedsList = [];
+
+    // لفة على كل حدث لوحده (عشان نضمن قراءة رامي ربيعة وكهربا)
+    ev.forEach(e => {
+        const isMyPlayer = (isH && e.team === 'h') || (!isH && e.team === 'a');
+        if (isMyPlayer) {
+            // صيد الأهداف
+            if (e.type === 'goal' || (e.text && e.text.includes("هدف"))) {
+                myGoalsList.push(`${e.player} (ق${e.time})`);
+            }
+            // صيد الإصابات (مهم جداً للي في صورتك)
+            if (e.type === 'injury' || (e.text && e.text.includes("إصابة"))) {
+                myInjuriesList.push(`${e.player} (ق${e.time})`);
+            }
+            // صيد الطرود
+            if (e.type === 'red' || (e.text && e.text.includes("طرد"))) {
+                myRedsList.push(`${e.player} (ق${e.time})`);
+            }
+        }
+    });
+
+    // --- بناء "الملحمة" بناءً على الصيد ---
+    let report = `في ليلة كروية لن تمحى من الذاكرة، استطاع نادي ${myTeam} أن يقدم عرضاً تكتيكياً مذهلاً أمام ${opN}، في لقاء انتهى بنتيجة (${myS} - ${opS}). \n\n`;
+
+    // فقرة الأهداف
+    if (myGoalsList.length > 0) {
+        report += `المانشيت العريض رُسم بأقدام النجوم [ ${myGoalsList.join(' ، ')} ] الذين مزقوا شباك المنافس ببراعة، محولين ضغطنا الهجومي إلى انتصار مستحق هز أركان المدرجات. \n\n`;
+    } else {
+        report += `وعلى الرغم من غياب الأهداف اليوم، إلا أن كتيبتنا قدمت أداءً قتالياً، وحاولنا مراراً اختراق حصون ${opN} ولكن الحظ لم يكن حليفنا في اللمسة الأخيرة. \n\n`;
+    }
+
+    // فقرة الإصابات (هنا هيظهر رامي ربيعة وكهربا)
+    if (myInjuriesList.length > 0) {
+        report += `للأسف، لم تمر المواجهة بسلام؛ فقد تلقى الجهاز الفني ضربة موجعة بإصابة كل من [ ${myInjuriesList.join(' ، ')} ]. خروج هؤلاء الأبطال أربك الحسابات وأثار قلق الجماهير التي تأمل ألا تطول مدة غيابهم عن المستطيل الأخضر. \n\n`;
+    }
+
+    // فقرة الطرود
+    if (myRedsList.length > 0) {
+        report += `الدراما بلغت ذروتها بعد إشهار الورقة الحمراء في وجه [ ${myRedsList.join(' ، ')} ]، مما وضع الفريق في اختبار صعب للصمود بنقص عددي أمام هجمات الخصم. \n\n`;
+    }
+
+    // فقرة التحليل الفني (لتطويل الخبر)
+    report += `من الناحية الفنية، تفوق مدرب ${myTeam} في إدارة المباراة بذكاء، حيث اعتمد على الضغط العالي الذي شل حركة لاعبي ${opN}. الجماهير خرجت راضية عن الروح القتالية، والآن كل العيون تتجه نحو الموقعة القادمة لتعزيز مكانتنا في الدوري. \n\n`;
+
+    report += `ختاماً، نعدكم بأن يظل ${myTeam} دائماً في القمة، وأن هذه الملحمة هي مجرد بداية لموسم استثنائي.`;
+
+    // تعبئة البيانات في المربعات
+    document.getElementById('press-title').value = `ملحمة ستاد القاهرة: ${myTeam} يقهر ${opN} بنتيجة ${myS}-${opS}`;
+    document.getElementById('press-input').value = report;
+}, 
+
+
+
+
+
+async postPress() {
+    const title = document.getElementById('press-title').value.trim();
+    const msg = document.getElementById('press-input').value.trim();
+    const errorMsg = document.getElementById('press-error');
+    const today = new Date().toLocaleDateString('ar-EG');
+
+    if (!title || !msg) return alert("المطبعة ترفض الأوراق الفارغة! اكتب العنوان والمحتوى.");
+    if (msg.length < 120) {
+        errorMsg.innerText = `⚠️ الخبر مرفوض! الطول الحالي ${msg.length} حرف والمطلوب 120 على الأقل.`;
+        errorMsg.style.display = "block";
+        return;
+    }
+    if (APP_STATE.user.lastPressDate === today) {
+        return alert("⚠️ العدد اليومي اكتمل! مسموح بمقال واحد فقط يومياً.");
+    }
+
+    await db.ref('News').push({
+        team: APP_STATE.user.team,
+        title: title,
+        msg: msg,
+        time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
+        date: today
+    });
+
+    await db.ref(`users/${ME}/lastPressDate`).set(today);
+    document.getElementById('press-title').value = "";
+    document.getElementById('press-input').value = "";
+    errorMsg.style.display = "none";
+},
+
+async generateAutoNews() {
+    const myTeam = APP_STATE.user.team;
+    let m = null;
+    for (let w in APP_STATE.schedule) {
+        const found = (APP_STATE.schedule[w].matches || []).find(x => x.done && (x.h === myTeam || x.a === myTeam));
+        if (found) m = found;
+    }
+    if (!m) return alert("لا يوجد تاريخ كروي لهذا الفريق لنكتب عنه اليوم!");
+
+    const isH = m.h === myTeam;
+    const myS = isH ? m.scoreH : m.scoreA;
+    const opS = isH ? m.scoreA : m.scoreH;
+    const opN = isH ? m.a : m.h;
+    
+    // بيانات دقيقة للمقال
+    const events = m.events || [];
+    const goals = events.filter(e => e.type === 'goal' && ((isH && e.team==='h') || (!isH && e.team==='a'))).map(e => e.player);
+    const redCards = events.filter(e => e.type === 'red' && ((isH && e.team==='h') || (!isH && e.team==='a'))).map(e => e.player);
+    const possession = 50 + (myS - opS) * 4 + (Math.random()*10 - 5);
+
+    // صياغة مقال طويل جداً (Long-Form Narrative)
+    let intro = `في ليلة ستبقى محفورة في أذهان عشاق نادي ${myTeam}، قدمت الكتيبة الفنية عرضاً كروياً يفوق الوصف أمام الخصم ${opN}. لم تكن مجرد مباراة كرة قدم، بل كانت لوحة تكتيكية رُسمت ببراعة على بساط الملعب الأخضر، حيث فرضنا سيطرة مطلقة بنسبة استحواذ بلغت ${possession.toFixed(1)}%، مما جعل الخصم يكتفي بدور المشاهد في أغلب فترات اللقاء. \n\n`;
+    
+    let goalsSection = goals.length > 0 
+        ? `البداية كانت صاعقة، حيث تجلى النجم ${goals[0]} بمهارة استثنائية مزقت شباك الخصم، معلناً عن نوايا هجومية لا تعرف الرحمة. وتوالت الهجمات المنظمة التي أسفرت عن ${myS} أهداف، كانت كفيلة بإخضاع ${opN} تماماً. المحللون أكدوا أن تحركات المهاجمين كانت "سمفونية" أربكت حسابات الدفاع المنافس الذي بدا تائهاً أمام طوفان هجماتنا. \n\n`
+        : `وعلى الرغم من غياب التوفيق في هز الشباك، إلا أن السيطرة الميدانية كانت تحكي قصة أخرى من الاستحواذ والبناء المنظم من الخلف، حيث عجز ${opN} عن مجاراة الرتم السريع الذي فرضه وسط ملعبنا. \n\n`;
+
+    let drama = redCards.length > 0 
+        ? `لكن الإثارة بلغت ذروتها حين أخرج الحكم الورقة الحمراء في وجه ${redCards.join(' و ')}، وهو ما وضع مدربنا أمام تحدٍ ذهني كبير. ومع ذلك، انقلبت المحنة إلى منحة، حيث أظهر الفريق صموداً قتالياً أثبت أن روح نادي ${myTeam} لا تنكسر تحت الضغط، بل تزداد لمعاناً. \n\n`
+        : `المباراة شهدت التزاماً انضباطياً كبيراً، حيث غابت البطاقات الحمراء تماماً عن صفوفنا، مما يبرز التركيز العالي والهدوء الذي زرعه المدرب في نفوس اللاعبين قبل انطلاق صافرة البداية. \n\n`;
+
+    let analysis = `أما عن الصراع التكتيكي، فقد تفوق مدرب ${myTeam} في معركة "تكسير العظام" في منطقة المناورات. استطاع خنق مفاتيح لعب ${opN} تماماً، مما جعل مدربهم يظهر عاجزاً عن إيجاد ثغرة واحدة في جدارنا الدفاعي الصلب. كان الفارق في الرؤية الفنية شاسعاً، حيث أدار مدربنا التغييرات بذكاء حاد، مجهضاً أي محاولة للعودة في النتيجة. \n\n`;
+
+    let conclusion = `بهذا الأداء البطولي، نرسل رسالة شديدة اللهجة لجميع المنافسين: نادي ${myTeam} لم يأتِ للمشاركة فحسب، بل جاء ليعتلي منصات التتويج. الجماهير غادرت المدرجات وهي تتغنى بأسماء اللاعبين، والآمال الآن تنصب على المواجهة القادمة لمواصلة هذه السلسلة المرعبة من العروض القوية.`;
+
+    const titles = [
+        `مانشيت الساعة: ${myTeam} يلتهم ${opN} في ملحمة الـ ${myS} أهداف`,
+        `تحليل خاص: كيف سقط ${opN} في فخ مدرب ${myTeam} التكتيكي؟`,
+        `بالأرقام.. ${myTeam} يفرض "ديكتاتورية" كروية على ${opN}`,
+        `زلزال في الدوري: ${myTeam} يكتسح بـ ${myS} أهداف وصمود أسطوري`
+    ];
+
+    document.getElementById('press-title').value = titles[Math.floor(Math.random()*titles.length)];
+    document.getElementById('press-input').value = intro + goalsSection + drama + analysis + conclusion;
+}, 
+
+
+// 2. دالة النشر مع قيود الـ 120 حرف والخبر الواحد يومياً
+async postPress() {
+    const title = document.getElementById('press-title').value.trim();
+    const msg = document.getElementById('press-input').value.trim();
+    const errorMsg = document.getElementById('press-error');
+    const today = new Date().toLocaleDateString('ar-EG');
+
+    if (!title || !msg) return alert("برجاء إدخال المانشيت وتفاصيل المقال!");
+    if (msg.length < 120) {
+        errorMsg.innerText = `⚠️ المقال قصير جداً (${msg.length}/120 حرف). الجريدة ترفض النشر!`;
+        errorMsg.style.display = "block";
+        return;
+    }
+    if (APP_STATE.user.lastPressDate === today) {
+        return alert("⚠️ مسموح بمقال واحد فقط لكل مدرب في العدد اليومي!");
+    }
+
+    await db.ref('News').push({
+        team: APP_STATE.user.team,
+        title: title,
+        msg: msg,
+        time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
+        date: today
+    });
+
+    await db.ref(`users/${ME}/lastPressDate`).set(today);
+    document.getElementById('press-title').value = "";
+    document.getElementById('press-input').value = "";
+    errorMsg.style.display = "none";
+    alert("🗞️ تم إرسال المقال للمطبعة بنجاح!");
+},
+
+// 3. محرك التوليد العميق (Deep Commentary Engine)
+async generateAutoNews() {
+    const myTeam = APP_STATE.user.team;
+    let m = null;
+    
+    // جلب آخر مباراة رسمية انتهت
+    for (let w in APP_STATE.schedule) {
+        const found = (APP_STATE.schedule[w].matches || []).find(x => x.done && (x.h === myTeam || x.a === myTeam));
+        if (found) m = found;
+    }
+
+    if (!m) return alert("عذراً! لا يوجد سجل مباريات لهذا الفريق لتوليد تقرير صحفي.");
+
+    const isH = m.h === myTeam;
+    const myS = isH ? m.scoreH : m.scoreA;
+    const opS = isH ? m.scoreA : m.scoreH;
+    const opN = isH ? m.a : m.h;
+    
+    // استخراج الأحداث التفصيلية
+    const events = m.events || [];
+    const myGoals = events.filter(e => e.type === 'goal' && ((isH && e.team==='h') || (!isH && e.team==='a'))).map(e => e.player);
+    const myReds = events.filter(e => e.type === 'red' && ((isH && e.team==='h') || (!isH && e.team==='a'))).map(e => e.player);
+    const myYellows = events.filter(e => e.type === 'yellow' && ((isH && e.team==='h') || (!isH && e.team==='a')));
+    const myInjuries = events.filter(e => e.type === 'injury' && ((isH && e.team==='h') || (!isH && e.team==='a')));
+
+    // حساب إحصائيات تقريبية ذكية
+    const possession = 50 + (myS - opS) * 4 + (Math.random()*10 - 5);
+    const totalPasses = Math.floor(possession * 7.5);
+
+    // صياغة المانشيت (عشوائي)
+    const titles = [
+        `زلزال كروي: ${myTeam} يروض ${opN} في ليلة تاريخية!`,
+        `سقوط الأقنعة.. كيف تلاعب مدرب ${myTeam} بخصمه بنتيجة ${myS}-${opS}؟`,
+        `تقرير الصدمة: ${myTeam} يفرض هيمنته المطلقة على "ديربي" ${opN}`,
+        `كتيبة ${myTeam} لا ترحم.. تحليل شامل لموقعة الـ ${myS} أهداف`
+    ];
+
+    // بناء التقرير المعمق
+    let report = `في أمسية كروية لن تنساها الجماهير، استطاع نادي ${myTeam} أن يقدم درساً في فنون كرة القدم أمام الخصم ${opN}. لم تكن مجرد مباراة، بل كانت معركة تكتيكية حسمها مدربنا ببراعة، حيث بلغت نسبة الاستحواذ ${possession.toFixed(1)}%، مما جعل الخصم يبدو تائهاً وسط طوفان الهجمات. \n\n`;
+
+    if (myGoals.length > 0) {
+        report += `شعلة الحماس انطلقت بقدام ${myGoals[0]} الذي مزق الشباك، وتبعه رفاقه في استعراض قوى أسفر عن ${myS} أهداف. يرى النقاد أن التحركات بدون كرة كانت "كلمة السر" في اختراق حصون ${opN} المتهالكة. \n\n`;
+    }
+
+    if (myReds.length > 0) {
+        report += `المباراة لم تخلُ من التوتر، حيث تلقى ${myReds.join(' و ')} الورقة الحمراء، وهو ما اعتبره البعض "نقطة تحول" لم يستغلها الخصم، بل زادت من صلابة روحنا القتالية. \n\n`;
+    }
+
+    if (myYellows.length > 2) {
+        report += `اتسم الأداء بالشراسة البدنية العالية، حيث تحصلنا على ${myYellows.length} إنذارات، مما يؤكد أن لاعبي ${myTeam} كانوا يقاتلون على كل كرة وكأنها الأخيرة. \n\n`;
+    }
+
+    if (myInjuries.length > 0) {
+        report += `للأسف دفعنا ضريبة الفوز بإصابة ${myInjuries.map(i=>i.player).join(', ')}، وننتظر التقرير الطبي لمعرفة حجم الضرر. \n\n`;
+    }
+
+    report += `ختاماً، التفوق الفني كان واضحاً؛ فبينما كان مدرب ${myTeam} يغير مراكز اللاعبين بديناميكية مذهلة، ظهر مدرب ${opN} عاجزاً، بلا خطة بديلة، مكتفياً بمشاهدة انهيار فريقه. نحن اليوم لا نحتفل فقط بـ ${totalPasses} تمريرة ناجحة، بل نحتفل بشخصية البطل التي بدأت تلوح في الأفق.`;
+
+    document.getElementById('press-title').value = titles[Math.floor(Math.random()*titles.length)];
+    document.getElementById('press-input').value = report;
+}, 
+
 
 
 async pickTeam(name) {
@@ -684,6 +1053,119 @@ const Engine = {
         }, 1000);
     },
 
+
+// دالة التحكم في الظهور (جديدة)
+// دالة التحكم في الظهور
+togglePressView(view) {
+    document.getElementById('press-main-menu').style.display = view === 'menu' ? 'block' : 'none';
+    document.getElementById('press-write-zone').style.display = view === 'write' ? 'block' : 'none';
+    document.getElementById('press-read-zone').style.display = view === 'read' ? 'block' : 'none';
+    if (view === 'read') this.loadPress(); 
+},
+
+// دالة التوليد الملحمي المحدثة
+async generateAutoNews() {
+    const myTeam = APP_STATE.user.team;
+    let m = null;
+    const schedule = APP_STATE.schedule;
+    const rounds = Object.keys(schedule).sort((a,b) => parseInt(b.split('_')[1]) - parseInt(a.split('_')[1]));
+    
+    for (let r of rounds) {
+        m = (schedule[r].matches || []).find(x => x.done && (x.h === myTeam || x.a === myTeam));
+        if (m) break;
+    }
+    if (!m) return alert("لا توجد مباريات مسجلة حالياً!");
+
+    const isH = m.h === myTeam;
+    const myS = isH ? m.scoreH : m.scoreA;
+    const opS = isH ? m.scoreA : m.scoreH;
+    const opN = isH ? m.a : m.h;
+
+    // استخراج كل تفاصيل الـ Events (أهداف، إصابات، كروت)
+    const ev = m.events || [];
+    
+    // فلترة الأحداث الخاصة بفريقي فقط
+    const myGoals = ev.filter(e => (e.type === 'goal' || e.text?.includes("هدف")) && ((isH && e.team==='h') || (!isH && e.team==='a')))
+                      .map(e => `${e.player} (ق${e.time})`);
+                      
+    const myInjuries = ev.filter(e => (e.type === 'injury' || e.text?.includes("إصابة")) && ((isH && e.team==='h') || (!isH && e.team==='a')))
+                         .map(e => `${e.player} (ق${e.time})`);
+                         
+    const myReds = ev.filter(e => (e.type === 'red' || e.text?.includes("طرد")) && ((isH && e.team==='h') || (!isH && e.team==='a')))
+                      .map(e => `${e.player} (ق${e.time})`);
+
+    // بناء النص الطويل (الملحمة)
+    let report = `شهد ملعب المباراة فصلاً جديداً من فصول الإثارة الكروية، حيث استطاع نادي ${myTeam} أن يقدم ملحمة تكتيكية أمام المنافس ${opN} في لقاء انتهى بنتيجة (${myS} - ${opS}). \n\n`;
+
+    // فقرة الأهداف
+    if (myS > 0) {
+        report += `المانشيت العريض رُسم بأقدام النجوم [ ${myGoals.join(' ، ')} ] الذين مزقوا شباك الخصم ببراعة، محولين ضغطنا الهجومي إلى انتصار مستحق هز أركان المدرجات. \n\n`;
+    } else {
+        report += `وعلى الرغم من غياب الأهداف اليوم، إلا أن كتيبتنا قدمت أداءً دفاعياً وهجومياً متوازناً، ولكن الكرة عاندت رغبة لاعبينا في الاحتفال. \n\n`;
+    }
+
+    // فقرة الإصابات (رامي ربيعة وكهربا اللي في صورتك)
+    if (myInjuries.length > 0) {
+        report += `للأسف، لم تمر المواجهة دون خسائر فنية؛ فقد تلقى الجهاز الفني ضربة قوية بعد خروج كل من [ ${myInjuries.join(' ، ')} ] بداعي الإصابة. المشهد كان مؤثراً والجماهير تضع أيديها على قلوبها قلقاً على هؤلاء الأبطال، بانتظار الفحوصات الطبية لتحديد مدة غيابهم عن المستطيل الأخضر. \n\n`;
+    }
+
+    // فقرة الكروت الحمراء
+    if (myReds.length > 0) {
+        report += `الجانب الدرامي في اللقاء زاد اشتعالاً بعد إشهار الورقة الحمراء في وجه [ ${myReds.join(' ، ')} ]، وهو ما أجبر الفريق على تغيير استراتيجيته للصمود بنقص عددي أمام هجمات ${opN}. \n\n`;
+    }
+
+    // فقرة التحليل التكتيكي (ثابتة لتطويل الخبر)
+    report += `من الناحية الفنية، تفوق مدرب ${myTeam} في إدارة اللقاء، حيث كانت التحركات العرضية والضغط العالي بمثابة الخنجر الذي مزق أحلام المنافس. المحللون أجمعوا أن الفريق يسير بخطى ثابتة نحو تحقيق طموحات الجماهير هذا الموسم. \n\n`;
+
+    report += `ختاماً، نحن نركز الآن على كسب النقاط الثلاث في التحدي القادم لتعزيز مركزنا في جدول الترتيب، ونعد جماهيرنا بأن القادم سيكون أفضل بإذن الله.`;
+
+    document.getElementById('press-title').value = `زلزال في الدوري: ${myTeam} يروض ${opN} في ليلة تاريخية!`;
+    document.getElementById('press-input').value = report;
+},
+
+// دالة النشر
+async postPress() {
+    const title = document.getElementById('press-title').value.trim();
+    const msg = document.getElementById('press-input').value.trim();
+    if (!title || !msg) return alert("اكمل البيانات أولاً!");
+
+    await db.ref('News').push({
+        team: APP_STATE.user.team,
+        title: title,
+        msg: msg,
+        time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
+        date: new Date().toLocaleDateString('ar-EG')
+    });
+
+    document.getElementById('press-title').value = "";
+    document.getElementById('press-input').value = "";
+    alert("تم النشر بنجاح!");
+    this.togglePressView('menu');
+},
+
+// دالة الرؤية
+loadPress() {
+    db.ref('News').on('value', (snapshot) => {
+        const data = snapshot.val();
+        let html = "";
+        if (data) {
+            Object.values(data).reverse().forEach(news => {
+                html += `
+                <div class="live-paper">
+                    <h1 class="paper-title">${news.title}</h1>
+                    <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:bold; border-bottom:1px solid #000; margin-bottom:15px; color:#000;">
+                        <span>النادي: ${news.team}</span>
+                        <span>${news.date || ''} | ${news.time}</span>
+                    </div>
+                    <div class="paper-body">
+                        ${news.msg.split('\n').filter(p=>p.trim()!=='').map(p => `<p>${p}</p>`).join('')}
+                    </div>
+                </div>`;
+            });
+        }
+        document.getElementById('press-feed').innerHTML = html || "<p style='text-align:center; color:#000;'>لا توجد أخبار منشورة.</p>";
+    });
+}, 
 
 
     // --- بقية الدوال الخاصة بالمحاكاة كما هي في كودك الأصلي ---
@@ -1266,45 +1748,79 @@ async postPress() {
 // 2. دالة توليد خبر تلقائي بناءً على آخر مباراة
 async generateAutoNews() {
     const myTeam = APP_STATE.user.team;
-    let lastMatch = null;
-
-    // البحث عن آخر مباراة انتهت للفريق
-    const sch = APP_STATE.schedule;
-    for (let w in sch) {
-        const m = (sch[w].matches || []).find(match => match.done && (match.h === myTeam || match.a === myTeam));
-        if (m) lastMatch = m; // هيجيب آخر واحدة لأن اللوب بيمشي بالترتيب
-    }
-
-    if (!lastMatch) return alert("لم يتم العثور على مباريات سابقة لتوليد خبر!");
-
-    const isHome = lastMatch.h === myTeam;
-    const myScore = isHome ? lastMatch.scoreH : lastMatch.scoreA;
-    const oppScore = isHome ? lastMatch.scoreA : lastMatch.scoreH;
-    const oppName = isHome ? lastMatch.a : lastMatch.h;
+    let m = null;
+    const schedule = APP_STATE.schedule;
     
-    // تجميع الهدافين
-    const myGoals = (lastMatch.events || [])
-        .filter(e => e.type === 'goal' && ((isHome && e.team === 'h') || (!isHome && e.team === 'a')))
-        .map(e => e.player);
-
-    let title = `بيان رسمي من نادي ${myTeam}`;
-    let content = "";
-
-    if (myScore > oppScore) {
-        title = `فرحة عارمة في ${myTeam} بعد سحق ${oppName}`;
-        content = `أعرب المدير الفني لنادي ${myTeam} عن سعادته البالغة بعد الانتصار الثمين على ${oppName} بنتيجة ${myScore}-${oppScore}. المباراة كانت ملحمية وشهدت تألقاً كبيراً من اللاعبين خصوصاً ${myGoals.join(' و ') || 'منظومة الدفاع'}. هذا الفوز يضعنا في مكانة قوية ويؤكد أننا قادمون للمنافسة على اللقب بكل قوة في الجولات القادمة.`;
-    } else if (myScore < oppScore) {
-        title = `تحليل الهزيمة: ${myTeam} يتعهد بالعودة`;
-        content = `في تصريحات عقب المباراة التي انتهت بنتيجة ${myScore}-${oppScore} لصالح ${oppName}، أكد نادي ${myTeam} أن الحظ لم يكن حليف الفريق اليوم رغم السيطرة في بعض الفترات. سجل هدفنا ${myGoals.join(' و ') || 'بصعوبة'} ولكننا سنعمل على معالجة الأخطاء الدفاعية فوراً. الجماهير تطالب بالتعويض ونحن نعدهم بالأفضل في المباراة القادمة.`;
-    } else {
-        title = `تعادل مثير بين ${myTeam} و ${oppName}`;
-        content = `انتهت مواجهة القمة بين ${myTeam} و ${oppName} بالتعادل الإيجابي ${myScore}-${oppScore}. صرح المتحدث الرسمي أن النتيجة عادلة للطرفين بالنظر لأحداث اللقاء. سجل أهدافنا اليوم ${myGoals.join(' و ') || 'الفريق بجهد جماعي'}. نحن نركز الآن على كسب النقاط الثلاث في التحدي القادم لتعزيز مركزنا في جدول الترتيب.`;
+    // 1. الوصول لأحدث مباراة انتهت (done: true)
+    const rounds = Object.keys(schedule).sort((a,b) => parseInt(b.split('_')[1]) - parseInt(a.split('_')[1]));
+    for (let r of rounds) {
+        const matches = schedule[r].matches || [];
+        m = matches.find(x => x.done && (x.h === myTeam || x.a === myTeam));
+        if (m) break;
     }
 
-    // وضع الخبر في الخانات (المدرب يراجعه قبل النشر)
-    document.getElementById('press-title').value = title;
-    document.getElementById('press-input').value = content;
-},
+    if (!m) return alert("لم يتم العثور على مباراة مكتملة!");
+
+    const isH = m.h === myTeam;
+    const myS = isH ? m.scoreH : m.scoreA;
+    const opS = isH ? m.scoreA : m.scoreH;
+    const opN = isH ? m.a : m.h;
+
+    // 2. تحليل المصفوفة (Events) بناءً على الكود اللي بعته
+    const ev = m.events || [];
+    let myGoals = [], myInjs = [], myReds = [];
+
+    // تحويل الـ Object لـ Array لضمان القراءة
+    const evList = Array.isArray(ev) ? ev : Object.values(ev);
+
+    evList.forEach(e => {
+        // التأكد إن الحدث يخص فريق المستخدم
+        if ((isH && e.team === 'h') || (!isH && e.team === 'a')) {
+            const type = e.type;
+            const detail = `${e.player} (ق${e.time})`;
+
+            if (type === 'goal') {
+                myGoals.push(detail);
+            } else if (type === 'injury') {
+                myInjs.push(detail);
+            } else if (type === 'red') {
+                myReds.push(detail);
+            }
+        }
+    });
+
+    // 3. صياغة الملحمة (كلام كتير ومنسق)
+    let report = `في ليلة كروية حبست الأنفاس، خاض نادي ${myTeam} ملحمة تكتيكية كبرى أمام الخصم ${opN}، في لقاء انتهى بنتيجة (${myS} - ${opS}). المباراة كانت مسرحاً للصراعات البدنية والمهارات الفنية التي هزت أركان الملعب. \n\n`;
+
+    if (myS > 0) {
+        report += `المانشيت العريض رُسم بأقدام النجوم [ ${myGoals.join(' ، ')} ] الذين تمكنوا من هز شباك ${opN} ببراعة فائقة، محولين ضغطنا المستمر إلى انتصار مستحق أثلج صدور الجماهير. \n\n`;
+    } else {
+        report += `وعلى الرغم من غياب الأهداف اليوم، إلا أن كتيبتنا قدمت أداءً هجومياً شرساً، ولكن الكرة عاندت رغبة لاعبينا أمام المرمى في أكثر من مناسبة. \n\n`;
+    }
+
+    // فقرة الإصابات (الآن ستقرأ رامي ربيعة وكهربا)
+    if (myInjs.length > 0) {
+        report += `للأسف، لم تمر المواجهة دون أوجاع؛ فقد تلقى الجهاز الفني ضربة قوية بإصابة كل من [ ${myInjs.join(' ، ')} ] نتيجة الالتحامات العنيفة. المشهد كان مؤثراً والجماهير تضع أيديها على قلوبها قلقاً على هؤلاء الأبطال، بانتظار التقرير الطبي الرسمي. \n\n`;
+    }
+
+    if (myReds.length > 0) {
+        report += `الجانب الدرامي زاد اشتعالاً بعد إشهار الورقة الحمراء في وجه [ ${myReds.join(' ، ')} ]، مما وضع الفريق في اختبار حقيقي للصمود بنقص عددي أمام طموحات الخصم. \n\n`;
+    }
+
+    report += `تحليلياً، يرى خبراء الصحيفة أن مدرب ${myTeam} تلاعب بخصمه كأنه في مباراة شطرنج، حيث كانت التغييرات والضغط العالي بمثابة "السم" الذي أجهز على أحلام ${opN}. نحن الآن نركز على التحدي القادم لتعزيز مكانتنا في القمة. \n\n`;
+    report += `ختاماً، نعد جماهيرنا بأن القادم سيكون أفضل، وعاش ${myTeam} دائماً في المقدمة!`;
+
+    // 4. تعبئة المربعات (مع ضمان اللون الأسود)
+    const titleBox = document.getElementById('press-title');
+    const inputBox = document.getElementById('press-input');
+    
+    titleBox.value = `زلزال في الدوري: ${myTeam} يروض ${opN} بنتيجة ${myS}-${opS}`;
+    inputBox.value = report;
+
+    // حل مشكلة اللون الأبيض (إجبار اللون الأسود عند التوليد)
+    titleBox.style.color = "#000";
+    inputBox.style.color = "#000";
+}, 
 
 
     async saveTactics() {
@@ -2647,14 +3163,15 @@ Engine.loadPress = function() {
             // ترتيب الأخبار من الأحدث للأقدم
             Object.values(data).reverse().forEach(news => {
                 html += `
-                    <div style="background:#222; margin:10px 0; padding:12px; border-radius:8px; border-right:4px solid #d4af37; text-align:right; border: 1px solid #333;">
-                        <strong style="color:#d4af37; font-size:14px;">📢 ${news.team || 'الإدارة'}</strong>
-                        <p style="margin:8px 0; color:#fff; font-size:13px; white-space:pre-wrap; line-height:1.5;">${news.msg}</p>
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px;">
-                             <small style="color:#555; font-size:10px;">${news.time || ''}</small>
-                             <small style="color:#444; font-size:9px;">رسمي</small>
-                        </div>
-                    </div>`;
+    <div style="background:#222; margin:15px 0; padding:15px; border-radius:8px; border-right:5px solid #d4af37; text-align:right;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+            <strong style="color:#d4af37; font-size:12px;">📢 ${news.team}</strong>
+            <small style="color:#555; font-size:10px;">${news.time}</small>
+        </div>
+        <h4 style="color:#fff; margin:5px 0; font-size:15px; border-bottom:1px solid #333; padding-bottom:5px;">${news.title || 'تصريح رسمي'}</h4>
+        <p style="margin:10px 0; color:#ccc; font-size:13px; white-space:pre-wrap; line-height:1.6;">${news.msg}</p>
+    </div>`;
+
             });
         } else {
             html = "<p style='text-align:center; color:#555; padding:20px;'>لا توجد أخبار حالياً في الغرفة الصحفية</p>";
@@ -2675,11 +3192,11 @@ Engine.loadPress();
 
 ملء تشكيلة المدربين بعد حذف المصابين
 تسجيل طرد الكمبيوتر  وعلاجه
-
+تسجيل طرد المدربين
 تسجيل اصابات المدربين وعلاجها
 تسجيل اصابات الكمبيوتر وعلاجها
 حذف المصابين من الكمبيوتر 
 حذف المطرودين من الكمبيوتر
-
+غرفة صحافة يدوية وتلقائية
 
 
