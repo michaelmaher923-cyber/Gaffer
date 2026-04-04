@@ -295,83 +295,74 @@
     </div>
 
     <style>
-@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700;900&display=swap');
+        /* أهم جزء: الـ CSS اللي بيجيب "الخامة" */
+        @import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700;900&display=swap'); /* خط كلاسيكي */
 
-.newspaper-container {
-    background: #fdfaf0 !important; /* لون الورق القديم */
-    padding: 15px;
-    border: 1px solid #d1c7ac;
-    font-family: 'Amiri', serif;
-    color: #111 !important;
-    max-width: 900px;
-    margin: 10px auto;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
-}
+        .antique-paper {
+            background: #fffef2 !important; /* لون ورقة الجرنال القديمة */
+            padding: 40px;
+            border: 1px solid #dcd5c5;
+            margin-bottom: 50px;
+            color: #000 !important; /* خط أسود صريح للمانشيتات */
+            box-shadow: 2px 10px 30px rgba(0,0,0,0.4);
+            position: relative;
+            background-image: url('https://www.transparenttextures.com/patterns/paper-fibers.png'); /* ملمس ألياف الورق */
+            transform: rotate(-0.3deg); /* ميلان بسيط كأنه جرنال مرصوص عشوائياً */
+            transition: 0.3s ease-out;
+            border-radius: 2px;
+        }
+        .antique-paper:hover { transform: rotate(0deg); } /* يتعدل لما تقف عليه */
 
-.newspaper-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 2px solid #111;
-    padding-bottom: 5px;
-    margin-bottom: 10px;
-    font-size: 14px;
-    font-weight: bold;
-}
+        /* المانشيت الرئيسي (خط ضخم وعريض زي الأهرام) */
+        .paper-main-title { 
+            font-family: 'Amiri', serif; 
+            font-size: 38px; 
+            margin: 5px 0 15px; 
+            text-align: center; 
+            border-bottom: 3px double #000; 
+            color: #000 !important; 
+            font-weight: 900; 
+            line-height: 1.1;
+        }
+        
+        /* بيانات المراجعة (تاريخ ورقم العدد) */
+        .paper-meta-zone {
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid #000;
+            border-bottom: 1px solid #000;
+            padding: 8px 0;
+            font-size: 13px;
+            font-weight: bold;
+            color: #111 !important;
+            margin-bottom: 25px;
+            font-family: serif;
+            background: rgba(0,0,0,0.03); /* تظليل خفيف */
+        }
 
-.header-center {
-    font-size: 45px; /* حجم كلمة الأهرام */
-    font-weight: 900;
-}
+        /* تنسيق الأعمدة الصارم للأخبار (قراءتها بتبدأ من العمود اليمين للشمال) */
+        .paper-columns { 
+            column-count: 2; /* تنسيق عمودين صارم زي الجرنال اللي في الصورة */
+            column-gap: 30px; 
+            column-rule: 1px solid #ddd; /* خط فاصل بين العمودين */
+            text-align: justify; 
+            color: #111 !important;
+            font-family: 'Times New Roman', serif; /* خط القراءة الكلاسيكي */
+            font-size: 16px; 
+            line-height: 1.9; /* مسافة بين السطور تريح العين */
+        }
+        
+        .paper-columns p { 
+            margin-bottom: 15px; 
+            text-indent: 15px; /* مسافة بداية الفقرة */
+            color: #111 !important;
+        }
 
-.main-headline {
-    font-size: 38px;
-    font-weight: 900;
-    text-align: center;
-    line-height: 1.1;
-    margin: 15px 0;
-    color: #000 !important;
-    border-bottom: 1px solid #111;
-    padding-bottom: 10px;
-}
+        /* إخفاء أسماء الجرائد الأصلية */
+        .paper-main-title::before { content: "جريدة النادي اليومية: "; font-size: 12px; font-weight: bold; }
 
-.main-section {
-    display: flex; /* عشان الصورة تبقى جنب الكلام */
-    gap: 20px;
-}
-
-.news-image {
-    flex: 1;
-    max-width: 200px;
-}
-
-.news-image img {
-    width: 100%;
-    border: 1px solid #111;
-    filter: grayscale(100%) contrast(120%); /* خليها أبيض واسود زي الجرنال القديم */
-}
-
-.caption { font-size: 11px; text-align: center; font-style: italic; }
-
-.news-columns {
-    flex: 2;
-    column-count: 2; /* أعمدة حقيقية */
-    column-gap: 20px;
-    column-rule: 1px solid #ddd;
-    text-align: justify;
-    font-size: 15px;
-    line-height: 1.5;
-}
-
-.side-brief {
-    margin-top: 15px;
-    border-top: 2px solid #111;
-    padding-top: 5px;
-    column-count: 3; /* أخبار صغيرة تحت */
-    font-size: 12px;
-}
-</style>
-
+        @media (max-width: 800px) { .paper-columns { column-count: 1; } } /* عمود واحد للموبايل */
+    </style>
 </section>
 
 
@@ -625,33 +616,12 @@ loadPress() {
                     <div class="paper-header">
                         <small>إصدار خاص • قسم التحليل الرياضي • ${news.time}</small>
                         <h1>${news.title}</h1>
-                    <div class="newspaper-container">
-    <div class="newspaper-header">
-        <div class="header-side">41 صفحة<br>75 قرشاً</div>
-        <div class="header-center">جريدة النادي</div>
-        <div class="header-side">الطبعة الأولى<br>الثلاثاء 4 أبريل 2026</div>
-    </div>
-
-    <div class="newspaper-body">
-        <h1 class="main-headline" id="h-title">عنوان الملحمة الكروية هنا</h1>
-
-        <div class="main-section">
-            <div class="news-image">
-                <img src="https://via.placeholder.com/200x150?text=Match+Photo" alt="Match">
-                <p class="caption">لقطة من داخل المعركة الكروية اليوم</p>
-            </div>
-
-            <div class="news-columns" id="h-content">
-                </div>
-        </div>
-        
-        <div class="side-brief">
-            <h3>بقلم: المدرب</h3>
-            <p>المباراة كانت اختباراً حقيقياً للروح القتالية، ولم نخذل الجماهير التي حضرت.</p>
-        </div>
-    </div>
-</div>
-
+                    </div>
+                    <div class="paper-meta">
+                        <span>المحرر: كابتن ${news.team}</span>
+                        <span>الحالة: تقرير رسمي</span>
+                        <span>بتاريخ: ${news.date || ''}</span>
+                    </div>
                     <div class="paper-body">${news.msg.split('\n').map(p => p.trim() !== '' ? `<p>${p}</p>` : '').join('')}</div>
                 </article>`;
             });
