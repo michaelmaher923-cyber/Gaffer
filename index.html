@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -667,34 +666,63 @@ async generateAutoNews() {
 
 
 async postPress() {
+    // 1. سحب البيانات من المربعات (العنوان، الخبر المولد، وتعليق المدرب اللي كتبته)
     const title = document.getElementById('press-title').value.trim();
-    const msg = document.getElementById('press-input').value.trim();
+    const autoMsg = document.getElementById('press-input').value.trim();
+    const coachComment = document.getElementById('coach-comment').value.trim(); // ده المربع اللي بتكتب فيه تعليقك
     const errorMsg = document.getElementById('press-error');
     const today = new Date().toLocaleDateString('ar-EG');
 
-    if (!title || !msg) return alert("المطبعة ترفض الأوراق الفارغة! اكتب العنوان والمحتوى.");
-    if (msg.length < 120) {
-        errorMsg.innerText = `⚠️ الخبر مرفوض! الطول الحالي ${msg.length} حرف والمطلوب 120 على الأقل.`;
-        errorMsg.style.display = "block";
-        return;
+    // 2. تأكد إن فيه خبر أصلاً
+    if (!title || !autoMsg) return alert("يا كابتن ولد الخبر الأول وبعدين اكتب تعليقك!");
+
+    // --- 💡 الخطوة السحرية للدمج 💡 ---
+    // هنا بنقول للجهاز: خد اللي المدرب كتبه (coachComment) وحطه فوق الخبر (autoMsg)
+    let finalMsg = "";
+    if (coachComment) {
+        finalMsg = `🎤 تصريح المدرب: "${coachComment}"\n\n${autoMsg}`;
+    } else {
+        finalMsg = autoMsg;
     }
+
+    // 3. منع التكرار
     if (APP_STATE.user.lastPressDate === today) {
-        return alert("⚠️ العدد اليومي اكتمل! مسموح بمقال واحد فقط يومياً.");
+        return alert("⚠️ مسموح بخبر واحد بس في اليوم!");
     }
 
-    await db.ref('News').push({
-        team: APP_STATE.user.team,
-        title: title,
-        msg: msg,
-        time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
-        date: today
-    });
+    try {
+        // 4. النشر في News (بنبعت الـ finalMsg المدموج)
+        await db.ref('News').push({
+            team: APP_STATE.user.team,
+            title: title,
+            msg: finalMsg, 
+            time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
+            date: today
+        });
 
-    await db.ref(`users/${ME}/lastPressDate`).set(today);
-    document.getElementById('press-title').value = "";
-    document.getElementById('press-input').value = "";
-    errorMsg.style.display = "none";
-},
+        // 5. التحديث في users (عشان يقفل اليوم) بنفس طريقة الـ pickTeam
+        await db.ref(`users/${ME}`).update({
+            lastPressDate: today
+        });
+        
+        APP_STATE.user.lastPressDate = today;
+
+        // 6. تنظيف المربعات
+        document.getElementById('press-title').value = "";
+        document.getElementById('press-input').value = "";
+        document.getElementById('coach-comment').value = "";
+        
+        alert("🗞️ تم نشر الخبر بتصريحك بنجاح!");
+        this.togglePressView('menu');
+
+    } catch (e) {
+        alert("حصل مشكلة في النت، حاول تاني!");
+    }
+}, 
+
+
+
+
 
 async generateAutoNews() {
     const myTeam = APP_STATE.user.team;
@@ -743,103 +771,11 @@ async generateAutoNews() {
 }, 
 
 
-// 2. دالة النشر مع قيود الـ 120 حرف والخبر الواحد يومياً
-async postPress() {
-    const title = document.getElementById('press-title').value.trim();
-    const msg = document.getElementById('press-input').value.trim();
-    const errorMsg = document.getElementById('press-error');
-    const today = new Date().toLocaleDateString('ar-EG');
-
-    if (!title || !msg) return alert("برجاء إدخال المانشيت وتفاصيل المقال!");
-    if (msg.length < 120) {
-        errorMsg.innerText = `⚠️ المقال قصير جداً (${msg.length}/120 حرف). الجريدة ترفض النشر!`;
-        errorMsg.style.display = "block";
-        return;
-    }
-    if (APP_STATE.user.lastPressDate === today) {
-        return alert("⚠️ مسموح بمقال واحد فقط لكل مدرب في العدد اليومي!");
-    }
-
-    await db.ref('News').push({
-        team: APP_STATE.user.team,
-        title: title,
-        msg: msg,
-        time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
-        date: today
-    });
-
-    await db.ref(`users/${ME}/lastPressDate`).set(today);
-    document.getElementById('press-title').value = "";
-    document.getElementById('press-input').value = "";
-    errorMsg.style.display = "none";
-    alert("🗞️ تم إرسال المقال للمطبعة بنجاح!");
-},
-
-// 3. محرك التوليد العميق (Deep Commentary Engine)
-async generateAutoNews() {
-    const myTeam = APP_STATE.user.team;
-    let m = null;
-    
-    // جلب آخر مباراة رسمية انتهت
-    for (let w in APP_STATE.schedule) {
-        const found = (APP_STATE.schedule[w].matches || []).find(x => x.done && (x.h === myTeam || x.a === myTeam));
-        if (found) m = found;
-    }
-
-    if (!m) return alert("عذراً! لا يوجد سجل مباريات لهذا الفريق لتوليد تقرير صحفي.");
-
-    const isH = m.h === myTeam;
-    const myS = isH ? m.scoreH : m.scoreA;
-    const opS = isH ? m.scoreA : m.scoreH;
-    const opN = isH ? m.a : m.h;
-    
-    // استخراج الأحداث التفصيلية
-    const events = m.events || [];
-    const myGoals = events.filter(e => e.type === 'goal' && ((isH && e.team==='h') || (!isH && e.team==='a'))).map(e => e.player);
-    const myReds = events.filter(e => e.type === 'red' && ((isH && e.team==='h') || (!isH && e.team==='a'))).map(e => e.player);
-    const myYellows = events.filter(e => e.type === 'yellow' && ((isH && e.team==='h') || (!isH && e.team==='a')));
-    const myInjuries = events.filter(e => e.type === 'injury' && ((isH && e.team==='h') || (!isH && e.team==='a')));
-
-    // حساب إحصائيات تقريبية ذكية
-    const possession = 50 + (myS - opS) * 4 + (Math.random()*10 - 5);
-    const totalPasses = Math.floor(possession * 7.5);
-
-    // صياغة المانشيت (عشوائي)
-    const titles = [
-        `زلزال كروي: ${myTeam} يروض ${opN} في ليلة تاريخية!`,
-        `سقوط الأقنعة.. كيف تلاعب مدرب ${myTeam} بخصمه بنتيجة ${myS}-${opS}؟`,
-        `تقرير الصدمة: ${myTeam} يفرض هيمنته المطلقة على "ديربي" ${opN}`,
-        `كتيبة ${myTeam} لا ترحم.. تحليل شامل لموقعة الـ ${myS} أهداف`
-    ];
-
-    // بناء التقرير المعمق
-    let report = `في أمسية كروية لن تنساها الجماهير، استطاع نادي ${myTeam} أن يقدم درساً في فنون كرة القدم أمام الخصم ${opN}. لم تكن مجرد مباراة، بل كانت معركة تكتيكية حسمها مدربنا ببراعة، حيث بلغت نسبة الاستحواذ ${possession.toFixed(1)}%، مما جعل الخصم يبدو تائهاً وسط طوفان الهجمات. \n\n`;
-
-    if (myGoals.length > 0) {
-        report += `شعلة الحماس انطلقت بقدام ${myGoals[0]} الذي مزق الشباك، وتبعه رفاقه في استعراض قوى أسفر عن ${myS} أهداف. يرى النقاد أن التحركات بدون كرة كانت "كلمة السر" في اختراق حصون ${opN} المتهالكة. \n\n`;
-    }
-
-    if (myReds.length > 0) {
-        report += `المباراة لم تخلُ من التوتر، حيث تلقى ${myReds.join(' و ')} الورقة الحمراء، وهو ما اعتبره البعض "نقطة تحول" لم يستغلها الخصم، بل زادت من صلابة روحنا القتالية. \n\n`;
-    }
-
-    if (myYellows.length > 2) {
-        report += `اتسم الأداء بالشراسة البدنية العالية، حيث تحصلنا على ${myYellows.length} إنذارات، مما يؤكد أن لاعبي ${myTeam} كانوا يقاتلون على كل كرة وكأنها الأخيرة. \n\n`;
-    }
-
-    if (myInjuries.length > 0) {
-        report += `للأسف دفعنا ضريبة الفوز بإصابة ${myInjuries.map(i=>i.player).join(', ')}، وننتظر التقرير الطبي لمعرفة حجم الضرر. \n\n`;
-    }
-
-    report += `ختاماً، التفوق الفني كان واضحاً؛ فبينما كان مدرب ${myTeam} يغير مراكز اللاعبين بديناميكية مذهلة، ظهر مدرب ${opN} عاجزاً، بلا خطة بديلة، مكتفياً بمشاهدة انهيار فريقه. نحن اليوم لا نحتفل فقط بـ ${totalPasses} تمريرة ناجحة، بل نحتفل بشخصية البطل التي بدأت تلوح في الأفق.`;
-
-    document.getElementById('press-title').value = titles[Math.floor(Math.random()*titles.length)];
-    document.getElementById('press-input').value = report;
-}, 
 
 
 
-async pickTeam(name) {
+
+Async pickTeam(name) {
     if (this.isProcessing) return;
     this.isProcessing = true;
 
@@ -864,8 +800,8 @@ async pickTeam(name) {
         const pick = (list) => {
             const idx = sorted.findIndex(p => list.includes(p.pos.toUpperCase()));
             if (idx !== -1) return sorted.splice(idx, 1)[0].n;
-            const yName = "ناشئ " + (cleanSquad.filter(x => x.n.startsWith("ناشئ")).length + 1);
-            if (!cleanSquad.find(x => x.n === yName)) cleanSquad.push({ n: yName, p: 50, pos: "ALL", inj: 0, susp: 0 });
+            const yName = "ناشئ " + (cleanSquad.filter(x => x.n.includes("ناشئ")).length + 1) + " " + name;
+            if (!cleanSquad.find(x => x.n === yName)) cleanSquad.push({ n: yName, p: 50, pos: "CM", inj: 0, susp: 0 });
             return yName;
         };
 
@@ -900,6 +836,7 @@ async pickTeam(name) {
 
 
 
+    
     
 };
 
@@ -1053,47 +990,34 @@ async generateAutoNews() {
 // دالة النشر
 async postPress() {
     const title = document.getElementById('press-title').value.trim();
-    const autoMsg = document.getElementById('press-input').value.trim(); // الخبر المولد
-    const coachComment = document.getElementById('coach-comment').value.trim(); // تصريح المدرب (الـ 80 حرف)
+    const autoMsg = document.getElementById('press-input').value.trim(); // الخبر اللي اتولد
+    const coachComment = document.getElementById('coach-comment').value.trim(); // تعليقك أنت
     const today = new Date().toLocaleDateString('ar-EG');
 
-    // 1. التحقق من وجود البيانات الأساسية
-    if (!title || !autoMsg) return alert("برجاء توليد الخبر أولاً وكتابة العنوان!");
+    if (!title || !autoMsg) return alert("ولد الخبر أولاً!");
 
-    // 2. التحقق من قيود النشر (خبر واحد في اليوم)
-    if (APP_STATE.user.lastPressDate === today) {
-        return alert("⚠️ مسموح بنشر خبر واحد فقط يومياً!");
-    }
-
-    // 3. دمج تصريح المدرب مع متن الخبر المولد
-    const finalMsg = coachComment ? `🎤 تصريح المدرب: "${coachComment}"\n\n${autoMsg}` : autoMsg;
+    // 🔥 هنا "الدمج" اللي بيخلي التعليق يظهر غصب عنه 🔥
+    let finalMsg = coachComment ? `🎤 تصريح المدرب: "${coachComment}"\n\n${autoMsg}` : autoMsg;
 
     try {
-        // 4. إرسال الخبر المدمج لقاعدة البيانات
+        // بنبعت finalMsg اللي فيه الاثنين مع بعض
         await db.ref('News').push({
             team: APP_STATE.user.team,
             title: title,
-            msg: finalMsg, // بنبعت النص الكامل هنا
+            msg: finalMsg, 
             time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
             date: today
         });
 
-        // 5. تحديث تاريخ النشر لمنع التكرار
-        await db.ref(`users/${ME}/lastPressDate`).set(today);
+        // تحديث جدول المستخدم
+        await db.ref(`users/${ME}`).update({ lastPressDate: today });
         APP_STATE.user.lastPressDate = today;
 
-        // 6. تنظيف الخانات والعودة للمنيو
-        document.getElementById('press-title').value = "";
-        document.getElementById('press-input').value = "";
-        document.getElementById('coach-comment').value = "";
-        
-        alert("✅ تم نشر الخبر وتصريحك بنجاح!");
+        alert("🗞️ تم النشر بتصريحك بنجاح!");
         this.togglePressView('menu');
-        
-    } catch (e) {
-        alert("حدث خطأ أثناء النشر، حاول مرة أخرى!");
-    }
+    } catch(e) { alert("خطأ في النشر"); }
 }, 
+
 
 
 // دالة الرؤية
@@ -1661,35 +1585,65 @@ await Admin.updateTeamStatus(dataA.username);
 
     // 1. دالة النشر اليدوي مع القيود
 async postPress() {
-    // 1. بنسحب العنوان
-    const title = document.getElementById('press-title').value.trim();
-    // 2. بنسحب الخبر المولد (الآلي)
-    const autoMsg = document.getElementById('press-input').value.trim();
-    // 3. بنسحب (تصريح المدرب) من المربع الجديد - ده السطر اللي كان ناقصك
-    const coachComment = document.getElementById('coach-comment').value.trim();
+    // 1. سحب العناصر بالظبط من الـ HTML بتاعك
+    const titleEl = document.getElementById('press-title');
+    const autoMsgEl = document.getElementById('press-input');
+    const coachCommentEl = document.getElementById('coach-comment'); // ده المربع الصغير
+    const today = new Date().toLocaleDateString('ar-EG');
 
-    if (!title || !autoMsg) return alert("اكمل البيانات أولاً!");
+    // 2. استخراج القيم "الآن"
+    const title = titleEl.value.trim();
+    const autoMsg = autoMsgEl.value.trim();
+    const coachComment = coachCommentEl ? coachCommentEl.value.trim() : "";
 
-    // --- 4. السطر ده هو "الدمج" اللي بيخليه يظهر في الجريدة ---
-    // لو المدرب كاتب كلام، بنحطه فوق الخبر.. لو مش كاتب، بننشر الخبر بس
-    const finalMsg = coachComment ? `🎤 تصريح المدرب: "${coachComment}"\n\n${autoMsg}` : autoMsg;
+    // 3. منع الأوراق الفارغة
+    if (!title || !autoMsg) {
+        return alert("يا كابتن ولد الخبر الأول وبعدين اكتب تعليقك!");
+    }
 
-    await db.ref('News').push({
-        team: APP_STATE.user.team,
-        title: title,
-        msg: finalMsg, // بنبعت الـ finalMsg (المدمج) مش الـ msg القديم
-        time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
-        date: new Date().toLocaleDateString('ar-EG')
-    });
+    // 4. دمج إجباري (لو فيه تعليق حطه فوق الخبر بسطرين)
+    let finalMsg = autoMsg; 
+    if (coachComment !== "") {
+        finalMsg = "🎤 تصريح المدرب: " + coachComment + "\n\n" + autoMsg;
+    }
 
-    // تنظيف كل الخانات بعد النشر
-    document.getElementById('press-title').value = "";
-    document.getElementById('press-input').value = "";
-    document.getElementById('coach-comment').value = ""; // تصفير خانة المدرب
-    
-    alert("تم النشر بنجاح مع تصريحك!");
-    this.togglePressView('menu');
+    // 5. التأكد من منع التكرار
+    if (APP_STATE.user.lastPressDate === today) {
+        return alert("⚠️ مسموح بخبر واحد يومياً!");
+    }
+
+    try {
+        // 6. النشر في News (القيمة المدموجة finalMsg)
+        await db.ref('News').push({
+            team: APP_STATE.user.team,
+            title: title,
+            msg: finalMsg, 
+            time: new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}),
+            date: today
+        });
+
+        // 7. التسجيل في users (زي الـ pickTeam اللي شغال عندك)
+        await db.ref('users/' + ME).update({
+            lastPressDate: today
+        });
+        
+        // تحديث الحالة محلياً
+        APP_STATE.user.lastPressDate = today;
+
+        // 8. تنظيف المربعات
+        titleEl.value = "";
+        autoMsgEl.value = "";
+        if (coachCommentEl) coachCommentEl.value = "";
+        
+        alert("🗞️ تم النشر بنجاح مع تصريحك!");
+        this.togglePressView('menu');
+
+    } catch (e) {
+        console.error("Firebase Error:", e);
+        alert("فشل في النشر، تأكد من اتصالك بالإنترنت");
+    }
 }, 
+
 
 // 2. دالة توليد خبر تلقائي بناءً على آخر مباراة
 async generateAutoNews() {
@@ -2128,16 +2082,26 @@ showAdmin() {
         const users = uSnap.val() || {};
         const computers = cSnap.val() || [];
 
-        // تجميع لاعبي البشر
-        Object.keys(users).forEach(uid => {
-            const u = users[uid];
-            const sq = Array.isArray(u.squad) ? u.squad : Object.values(u.squad || {});
-            sq.forEach(p => {
-                let pData = { ...p, team: u.team, owner: u.ME || "مدرب" };
-                allPlayers.push(pData);
-                if ((p.inj || 0) > 0 || (p.susp || 0) > 0) absents.push(pData);
-            });
-        });
+ // تجميع لاعبي البشر
+Object.keys(users).forEach(uid => {
+    const u = users[uid];
+    const sq = Array.isArray(u.squad) ? u.squad : Object.values(u.squad || {});
+    
+    // سحب الـ username المسجل للمدرب، ولو مش موجود يكتب "مدرب" كاحتياط
+    const coachName = u.username || "مدرب"; 
+
+    sq.forEach(p => {
+        // نربط كل لاعب باسم صاحب الفريق (المدرب)
+        let pData = { 
+            ...p, 
+            team: u.team, 
+            owner: coachName // هنا هيظهر الـ Username الحقيقي في الجدول
+        };
+        allPlayers.push(pData);
+        if ((p.inj || 0) > 0 || (p.susp || 0) > 0) absents.push(pData);
+    });
+});
+
 
         // تجميع لاعبي الكمبيوتر
         computers.forEach(t => {
@@ -3144,18 +3108,3 @@ document.getElementById('coach-comment').addEventListener('input', function() {
 </script>
 </body>
 </html>
-
-
-
-
-
-ملء تشكيلة المدربين بعد حذف المصابين
-تسجيل طرد الكمبيوتر  وعلاجه
-تسجيل طرد المدربين
-تسجيل اصابات المدربين وعلاجها
-تسجيل اصابات الكمبيوتر وعلاجها
-حذف المصابين من الكمبيوتر 
-حذف المطرودين من الكمبيوتر
-غرفة صحافة يدوية وتلقائية مقيدة
-
-
