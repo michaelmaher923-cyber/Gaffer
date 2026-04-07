@@ -775,7 +775,7 @@ async generateAutoNews() {
 
 
 
-Async pickTeam(name) {
+async pickTeam(name) {
     if (this.isProcessing) return;
     this.isProcessing = true;
 
@@ -800,8 +800,8 @@ Async pickTeam(name) {
         const pick = (list) => {
             const idx = sorted.findIndex(p => list.includes(p.pos.toUpperCase()));
             if (idx !== -1) return sorted.splice(idx, 1)[0].n;
-            const yName = "ناشئ " + (cleanSquad.filter(x => x.n.includes("ناشئ")).length + 1) + " " + name;
-            if (!cleanSquad.find(x => x.n === yName)) cleanSquad.push({ n: yName, p: 50, pos: "CM", inj: 0, susp: 0 });
+            const yName = "ناشئ " + (cleanSquad.filter(x => x.n.startsWith("ناشئ")).length + 1);
+            if (!cleanSquad.find(x => x.n === yName)) cleanSquad.push({ n: yName, p: 50, pos: "ALL", inj: 0, susp: 0 });
             return yName;
         };
 
@@ -836,7 +836,6 @@ Async pickTeam(name) {
 
 
 
-    
     
 };
 
