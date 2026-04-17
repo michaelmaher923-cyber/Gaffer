@@ -1,5 +1,3 @@
-تصحيح عروض الكمبيوتر
-
 
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -800,12 +798,22 @@ async pickTeam(name) {
             .sort((a, b) => b.p - a.p);
 
         const pick = (list) => {
-            const idx = sorted.findIndex(p => list.includes(p.pos.toUpperCase()));
-            if (idx !== -1) return sorted.splice(idx, 1)[0].n;
-            const yName = "ناشئ " + (cleanSquad.filter(x => x.n.startsWith("ناشئ")).length + 1);
-            if (!cleanSquad.find(x => x.n === yName)) cleanSquad.push({ n: yName, p: 50, pos: "ALL", inj: 0, susp: 0 });
-            return yName;
-        };
+    // 1. محاولة البحث عن لاعب في المركز المطلوب أولاً
+    const idx = sorted.findIndex(p => list.includes(p.pos.toUpperCase()));
+    
+    if (idx !== -1) {
+        return sorted.splice(idx, 1)[0].n;
+    }
+
+    // 2. إذا لم يجد المركز المطلوب، يأخذ أول لاعب متاح في القائمة (أي مركز)
+    if (sorted.length > 0) {
+        return sorted.splice(0, 1)[0].n;
+    }
+
+    // 3. إذا كانت القائمة فارغة تماماً (لا يوجد لاعبين نهائياً)
+    return "لا يوجد لاعب"; 
+};
+
 
         const lineup = {
             0: pick(["GK"]), 1: pick(["CB", "DF"]), 2: pick(["CB", "DF"]),
@@ -2971,7 +2979,7 @@ const Admin = {
                 updates[`/users/${userId}/team`] = "بدون فريق";
                 updates[`/users/${userId}/LastTrainDay`] = null; 
                 updates[`/users/${userId}/ReceivedOffers`] = null; 
-                updates[`/users/${userId}/Specialists`] = null; 
+                updates[`/users/${userId}/specialists`] = null; 
                 updates[`/users/${userId}/tactics`] = null; 
                 updates[`/users/${userId}/squad`] = null; 
                 updates[`/users/${userId}/lineup`] = null; 
@@ -3146,18 +3154,3 @@ document.getElementById('coach-comment').addEventListener('input', function() {
 </script>
 </body>
 </html>
-
-
-
-
-
-ملء تشكيلة المدربين بعد حذف المصابين
-تسجيل طرد الكمبيوتر  وعلاجه
-تسجيل طرد المدربين
-تسجيل اصابات المدربين وعلاجها
-تسجيل اصابات الكمبيوتر وعلاجها
-حذف المصابين من الكمبيوتر 
-حذف المطرودين من الكمبيوتر
-غرفة صحافة يدوية وتلقائية مقيدة
-تصحيح عروض الكمبيوتر
-
