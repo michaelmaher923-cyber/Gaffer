@@ -1,3 +1,5 @@
+تصحيح عروض الكمبيوتر
+
 
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -844,77 +846,114 @@ const Engine = {
 
     // 1. إرسال العرض وتفعيل رد الكمبيوتر أو المدرب (معدلة لمنع التكرار)
     async sendOffer(targetTeam, playerName, price) {
-        const now = Date.now();
-        let currentWeek = "الجولة_1"; 
+    const now = Date.now();
+    let currentWeek = "الجولة_1"; 
+    
+    // 1. تحديد الجولة الحالية
+    for (let week in APP_STATE.schedule) {
+        if (now >= APP_STATE.schedule[week].time) currentWeek = week;
+    }
+
+    // 2. التحقق من استهلاك العرض الأسبوعي
+    if (APP_STATE.user.lastOfferWeek === currentWeek) {
+        return alert(`⚠️ مسموح بعرض واحد فقط في الجولة [${currentWeek.replace('_', ' ')}]. انتظر الجولة القادمة!`);
+    }
+
+    // 3. التحقق من صحة المبلغ والميزانية
+    const offerPrice = parseInt(price);
+    if (!offerPrice || offerPrice <= 0) return alert("أدخل مبلغاً صالحاً!");
+    if (offerPrice > APP_STATE.user.budget) return alert("ميزانيتك لا تسمح!");
+
+    // --- التعديل الجديد: منع العرض لو الفريق المستهدف (مدرب أو كمبيوتر) عنده 13 لاعب أو أقل ---
+    const targetTeamData = APP_STATE.league.find(t => t.name === targetTeam);
+    
+    if (targetTeamData) {
+        const playersCount = Array.isArray(targetTeamData.players) 
+            ? targetTeamData.players.length 
+            : Object.keys(targetTeamData.players || {}).length;
+
+        if (playersCount <= 13) {
+            return alert(`❌ لا يمكن التفاوض مع ${targetTeam}. الفريق يمتلك ${playersCount} لاعبين فقط، وهو الحد الأدنى المسموح به!`);
+        }
+    }
+    // --------------------------------------------------------------------------
+
+    const toUser = APP_STATE.taken[targetTeam]; // هل الفريق لمدرب حقيقي؟
+
+    if (toUser) {
+        // لو مدرب حقيقي: نبعت العرض لبريده
+        const offerId = Date.now();
+        await db.ref(`users/${toUser}/receivedOffers/${offerId}`).set({
+            from: APP_STATE.user.team, 
+            fromUser: ME, 
+            player: playerName,
+            price: offerPrice, 
+            status: 'pending', 
+            id: offerId, 
+            week: currentWeek
+        });
         
-        // تحديد الجولة الحالية بدقة بناءً على الجدول
-        for (let week in APP_STATE.schedule) {
-            if (now >= APP_STATE.schedule[week].time) currentWeek = week;
-        }
+        // تسجيل استهلاك العرض
+        await db.ref(`users/${ME}`).update({ lastOfferWeek: currentWeek });
+        alert("تم إرسال العرض لمدرب الفريق.. انتظر رده في البريد.");
+    } else {
+        // لو كمبيوتر: نخليه يقرر فوراً
+        // (ملحوظة: بما أننا فحصنا الـ 13 لاعب هنا، يمكنك إزالة الفحص من داخل ProcessCPUDecision لعدم التكرار)
+        this.ProcessCPUDecision(targetTeam, playerName, offerPrice, currentWeek);
+    }
+}, 
 
-        // المنع الفوري لو المستخدم أرسل عرضاً في هذه الجولة بالفعل
-        if (APP_STATE.user.lastOfferWeek === currentWeek) {
-            return alert(`⚠️ مسموح بعرض واحد فقط في الجولة [${currentWeek.replace('_', ' ')}]. انتظر الجولة القادمة!`);
-        }
-
-        const offerPrice = parseInt(price);
-        if (!offerPrice || offerPrice <= 0) return alert("أدخل مبلغاً صالحاً!");
-        if (offerPrice > APP_STATE.user.budget) return alert("ميزانيتك لا تسمح!");
-
-        const toUser = APP_STATE.taken[targetTeam]; // هل الفريق لمدرب حقيقي؟
-
-        if (toUser) {
-            // لو مدرب حقيقي: نبعت العرض لبريده
-            const offerId = Date.now();
-            await db.ref(`users/${toUser}/receivedOffers/${offerId}`).set({
-                from: APP_STATE.user.team, fromUser: ME, player: playerName,
-                price: offerPrice, status: 'pending', id: offerId, week: currentWeek
-            });
-            // تسجيل إن المستخدم استهلك عرضه في هذه الجولة
-            await db.ref(`users/${ME}`).update({ lastOfferWeek: currentWeek });
-            alert("تم إرسال العرض لمدرب الفريق.. انتظر رده في البريد.");
-        } else {
-            // لو كمبيوتر: نخليه يقرر فوراً
-            this.ProcessCPUDecision(targetTeam, playerName, offerPrice, currentWeek);
-        }
-    },
 
     // 2. دالة اتخاذ القرار (الرد التلقائي من الكمبيوتر)
     ProcessCPUDecision(teamName, playerName, price, week) {
-        const teamData = APP_STATE.league.find(t => t.name === teamName);
-        const player = teamData.players.find(p => p.n === playerName);
-        if (!player) return;
+    const teamData = APP_STATE.league.find(t => t.name === teamName);
+    const player = teamData.players.find(p => p.n === playerName);
+    if (!player) return;
 
-        // حساب القيمة العادلة
-        const fairValue = Math.pow(player.p, 2) * 1100;
-        const ratio = price / fairValue;
+    const fairValue = Math.pow(player.p, 2) * 1100;
+    const ratio = price / fairValue;
 
-        setTimeout(async () => {
-            let accepted = false;
+    setTimeout(async () => {
+        let accepted = false;
+        if (ratio >= 2.0) accepted = Math.random() < 0.7;
+        else if (ratio >= 1.5) accepted = Math.random() < 0.3;
+        else if (ratio >= 1.2) accepted = Math.random() < 0.05;
+        else accepted = false; 
+
+        await db.ref(`users/${ME}`).update({ lastOfferWeek: week });
+
+        if (accepted) {
+            const cleanPlayer = { n: player.n, p: parseInt(player.p), pos: player.pos || "AM" };
+            const currentSquad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
             
-            if (ratio >= 2.0) accepted = Math.random() < 0.7; // ضعف القيمة
-            else if (ratio >= 1.5) accepted = Math.random() < 0.3; // زيادة 50%
-            else if (ratio >= 1.2) accepted = Math.random() < 0.05; // زيادة 20%
-            else accepted = false; 
+            // 1. حذف اللاعب محلياً أولاً
+            const updatedPlayers = teamData.players.filter(p => p.n !== playerName);
+            const tIdx = APP_STATE.league.findIndex(t => t.name === teamName);
 
-            // في كل الحالات (قبول أو رفض) يتم تسجيل استهلاك العرض لهذه الجولة
-            await db.ref(`users/${ME}`).update({ lastOfferWeek: week });
-
-            if (accepted) {
-                // تنفيذ البيع فوراً
-                const cleanPlayer = { n: player.n, p: parseInt(player.p), pos: player.pos || "AM" };
-                const currentSquad = Array.isArray(APP_STATE.user.squad) ? APP_STATE.user.squad : Object.values(APP_STATE.user.squad || {});
-                
-                await db.ref(`users/${ME}`).update({
+            // 2. تحديث قاعدة البيانات
+            const updates = [
+                db.ref(`users/${ME}`).update({
                     squad: [...currentSquad, cleanPlayer],
                     budget: APP_STATE.user.budget - price
-                });
-                alert(`✅ وافق نادي ${teamName} على بيع [${playerName}] بمبلغ ${price.toLocaleString()}$`);
-            } else {
-                alert(`❌ رفض نادي ${teamName} العرض. المبلغ غير كافٍ للتخلي عن نجم الفريق!`);
+                })
+            ];
+
+            // 3. إضافة وعد تحديث النادي للمصفوفة إذا وجد
+            if (tIdx !== -1) {
+                updates.push(db.ref(`league_data/${tIdx}/players`).set(updatedPlayers));
+                APP_STATE.league[tIdx].players = updatedPlayers; // تحديث محلي
             }
-        }, 1000);
-    },
+
+            await Promise.all(updates);
+
+            alert(`✅ وافق نادي ${teamName} على بيع [${playerName}] بمبلغ ${price.toLocaleString()}$`);
+        } else {
+            alert(`❌ رفض نادي ${teamName} العرض.`);
+        }
+    }, 1000);
+},
+
+
 
 
 // دالة التحكم في الظهور (جديدة)
@@ -3107,3 +3146,18 @@ document.getElementById('coach-comment').addEventListener('input', function() {
 </script>
 </body>
 </html>
+
+
+
+
+
+ملء تشكيلة المدربين بعد حذف المصابين
+تسجيل طرد الكمبيوتر  وعلاجه
+تسجيل طرد المدربين
+تسجيل اصابات المدربين وعلاجها
+تسجيل اصابات الكمبيوتر وعلاجها
+حذف المصابين من الكمبيوتر 
+حذف المطرودين من الكمبيوتر
+غرفة صحافة يدوية وتلقائية مقيدة
+تصحيح عروض الكمبيوتر
+
