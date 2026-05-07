@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -157,7 +158,7 @@
 
             <div class="nav-item" onclick="UI.page('transfers', this)"><i class="fas fa-exchange-alt"></i> الانتقالات</div>
             <div class="nav-item" onclick="UI.page('press', this)"><i class="fas fa-microphone-alt"></i> غرفة الصحافة</div>
-            <div class="nav-item" style="color:var(--blue)" onclick="UI.showFriendly()"><i class="fas fa-handshake"></i> مباراة ودية</div>
+
            <div class="nav-item" onclick="UI.showLeagueStats()">
     <i class="fas fa-chart-line"></i> إحصائيات الدوري
 </div>
@@ -2673,28 +2674,41 @@ sortedKeys.forEach(key => {
         this.modal(h);
     },
         // استبدل دالة runFriendly القديمة بهذا الكود
-runFriendly(opp) { 
+RunFriendly(opp) { 
+    // 1. حساب الجولة يدويًا للتأكد
     const now = Date.now();
     let currentWeek = "الجولة_1"; 
-    
-    // 1. تحديد الجولة الحالية بناءً على جدول الدوري
-    for (let week in APP_STATE.schedule) {
-        if (now >= APP_STATE.schedule[week].time) currentWeek = week;
+    if (APP_STATE.schedule) {
+        for (let week in APP_STATE.schedule) {
+            if (now >= APP_STATE.schedule[week].time) currentWeek = week;
+        }
     }
 
-    // 2. التحقق إذا كان المدرب لعب ودي في هذه الجولة سابقاً
-    if (APP_STATE.user.lastFriendlyWeek === currentWeek) {
-        return alert(`⚠️ عذراً! مسموح بمباراة ودية واحدة فقط في كل جولة. انتظر حتى تبدأ [الجولة القادمة].`);
+    // 2. التحقق (لو مفيش بيانات للمستخدم عدي الفحص عشان الماتش يشتغل)
+    if (APP_STATE.user && APP_STATE.user.lastFriendlyWeek === currentWeek) {
+        return alert(`⚠️ لعبت ودي في ${currentWeek.replace('_', ' ')} بالفعل!`);
     }
 
-    // 3. تحديث قاعدة البيانات فوراً "قبل" البدء لمنع الضغط المتكرر
-    db.ref(`users/${ME}`).update({ lastFriendlyWeek: currentWeek });
+    // 3. التنفيذ الفوري
+    try {
+        // تحديث قاعدة البيانات والحالة المحلية
+        if (APP_STATE.user) APP_STATE.user.lastFriendlyWeek = currentWeek;
+        db.ref(`users/${ME}`).update({ lastFriendlyWeek: currentWeek });
 
-    // 4. إغلاق المودال وبدء المحاكاة
-    this.closeModal(); 
-    Engine.simulate(APP_STATE.user.team, opp, false, true, currentWeek); 
-}
-,
+        // إغلاق المودال
+        this.closeModal(); 
+
+        // بدء المحاكاة فورًا
+        console.log("Starting match against: " + opp);
+        Engine.simulate(APP_STATE.user.team, opp, false, true, currentWeek); 
+
+    } catch (e) {
+        console.error("خطأ في تشغيل الودية:", e);
+        alert("حدث خطأ، جرب مرة أخرى");
+    }
+}, 
+
+
 
     openPlayerSelection(sIdx) {
     APP_STATE.currentSlot = sIdx;
@@ -3154,3 +3168,4 @@ document.getElementById('coach-comment').addEventListener('input', function() {
 </script>
 </body>
 </html>
+
